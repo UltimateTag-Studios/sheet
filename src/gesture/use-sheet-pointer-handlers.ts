@@ -53,6 +53,12 @@ export function useSheetPointerHandlers(
   dispatch: (event: SheetMachineEvent) => SheetMachineResult,
   readScrollTop: () => number,
   applyBodyScrollDelta: (deltaPx: number) => void,
+  scrollMomentum: {
+    recordScrollPointerSample: (clientY: number) => void;
+    releaseScrollMomentum: () => void;
+    cancelScrollMomentum: () => void;
+    clearScrollPointerTracking: () => void;
+  },
 ): SheetPointerHandlers {
   const capturedPointerIdRef = useRef<number | null>(null);
   const captureTargetRef = useRef<HTMLElement | null>(null);
@@ -64,10 +70,12 @@ export function useSheetPointerHandlers(
   const dispatchRef = useRef(dispatch);
   const readScrollTopRef = useRef(readScrollTop);
   const applyBodyScrollDeltaRef = useRef(applyBodyScrollDelta);
+  const scrollMomentumRef = useRef(scrollMomentum);
 
   dispatchRef.current = dispatch;
   readScrollTopRef.current = readScrollTop;
   applyBodyScrollDeltaRef.current = applyBodyScrollDelta;
+  scrollMomentumRef.current = scrollMomentum;
 
   const removeDocumentListeners = useCallback(() => {
     const listeners = documentListenersRef.current;
@@ -97,6 +105,8 @@ export function useSheetPointerHandlers(
 
   const applyMoveResult = useCallback(
     (event: PointerEvent, result: SheetMachineResult) => {
+      const intent = result.state.gesture?.intent;
+
       if (
         result.bodyScrollDeltaPx !== undefined &&
         result.bodyScrollDeltaPx !== 0
@@ -104,7 +114,12 @@ export function useSheetPointerHandlers(
         applyBodyScrollDeltaRef.current(result.bodyScrollDeltaPx);
       }
 
-      const intent = result.state.gesture?.intent;
+      if (intent === "scroll") {
+        scrollMomentumRef.current.recordScrollPointerSample(event.clientY);
+      } else if (intent === "sheet") {
+        scrollMomentumRef.current.clearScrollPointerTracking();
+      }
+
       if (
         result.state.phase === "dragging" &&
         (intent === "sheet" || intent === "scroll")
@@ -163,6 +178,7 @@ export function useSheetPointerHandlers(
         type: "pointerUp",
         pointerId: event.pointerId,
       });
+      scrollMomentumRef.current.releaseScrollMomentum();
       endCapture(event.pointerId);
     },
     [endCapture],
@@ -174,6 +190,9 @@ export function useSheetPointerHandlers(
         if (event.button !== 0) {
           return;
         }
+
+        scrollMomentumRef.current.cancelScrollMomentum();
+        scrollMomentumRef.current.clearScrollPointerTracking();
 
         const result = dispatchRef.current({
           type: "pointerDown",

@@ -8,7 +8,7 @@ import {
   screen,
 } from "@testing-library/react";
 import { useState } from "react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { Sheet, type SheetSnap } from "./sheet";
 import { SheetLayout } from "./sheet-layout";
@@ -294,6 +294,48 @@ describe("Sheet gesture integration", () => {
     pointerUp(5, 520);
 
     expect(screen.getByTestId("snap").textContent).not.toBe("full");
+  });
+
+  it("continues body scroll momentum after a fast fling release", async () => {
+    vi.useFakeTimers({ toFake: ["performance", "requestAnimationFrame"] });
+
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: 800,
+      writable: true,
+    });
+
+    render(<TestFullSheetWithScroll />);
+
+    const body = document.querySelector("[data-sheet-scroll-root]");
+    if (!(body instanceof HTMLDivElement)) {
+      throw new Error("Expected sheet scroll root");
+    }
+
+    stubScrollRootDimensions(body, 400, 2000);
+
+    pointerDown(body, 6, 500);
+    vi.advanceTimersByTime(20);
+    pointerMove(6, 460);
+    vi.advanceTimersByTime(20);
+    pointerMove(6, 420);
+    vi.advanceTimersByTime(20);
+    pointerMove(6, 380);
+    vi.advanceTimersByTime(20);
+    pointerMove(6, 340);
+
+    const scrollAtRelease = body.scrollTop;
+    expect(scrollAtRelease).toBeGreaterThan(0);
+
+    pointerUp(6, 340);
+
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+
+    expect(body.scrollTop).toBeGreaterThan(scrollAtRelease);
+
+    vi.useRealTimers();
   });
 
   it("does not steal first body tap at half snap before move slop", () => {

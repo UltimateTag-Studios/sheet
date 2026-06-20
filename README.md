@@ -70,7 +70,7 @@ One pointer gesture can move through multiple modes without releasing:
 | Body at full height, content scrolled | Scroll content |
 | Body at full height, scroll at top | Drag up scrolls; drag down collapses sheet |
 
-Body scroll is driven programmatically while the pointer is captured. When the sheet settles to a new snap, body scroll resets to the top.
+Body scroll is driven programmatically while the pointer is captured. On release, a fast fling continues with decaying momentum (same direction as the drag). A new pointer down or snap change cancels momentum. When the sheet settles to a new snap, body scroll resets to the top.
 
 Do **not** add `overflow-y-auto` to body content — the shell owns scroll on the body root (`data-sheet-scroll-root`).
 

@@ -193,8 +193,30 @@ export function Sheet({
     state.fullHeightPx,
   ]);
 
-  const { readScrollTop, applyBodyScrollDelta, registerBodyEl } =
-    useSheetBodyScroll(state.restingSnap);
+  const {
+    readScrollTop,
+    applyBodyScrollDelta,
+    registerBodyEl,
+    recordScrollPointerSample,
+    releaseScrollMomentum,
+    cancelScrollMomentum,
+    clearScrollPointerTracking,
+  } = useSheetBodyScroll(state.restingSnap);
+
+  const scrollMomentum = useMemo(
+    () => ({
+      recordScrollPointerSample,
+      releaseScrollMomentum,
+      cancelScrollMomentum,
+      clearScrollPointerTracking,
+    }),
+    [
+      cancelScrollMomentum,
+      clearScrollPointerTracking,
+      recordScrollPointerSample,
+      releaseScrollMomentum,
+    ],
+  );
 
   const registerBodyRoot = useCallback(
     (node: HTMLDivElement | null) => {
@@ -212,6 +234,7 @@ export function Sheet({
     dispatch,
     readScrollTop,
     applyBodyScrollDelta,
+    scrollMomentum,
   );
 
   const transformStyle = useMemo(
