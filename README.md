@@ -72,7 +72,11 @@ One pointer gesture can move through multiple modes without releasing:
 
 Body scroll is driven programmatically while the pointer is captured. On release, a fast fling continues with decaying momentum (same direction as the drag). A new pointer down or snap change cancels momentum. When the sheet settles to a new snap, body scroll resets to the top.
 
-Body pointer routing uses **capture** on the scroll root so drags can start on buttons and cards. Below move slop (8px), taps activate controls normally; once slop is exceeded, the gesture commits and the control click is suppressed.
+Body pointer routing uses **capture** on the scroll root so drags can start on buttons and cards. Below move slop, taps activate controls normally; once slop is exceeded, the gesture commits and the control click is suppressed.
+
+### Move slop
+
+Tap-vs-drag disambiguation uses `SHEET_AXIS_THRESHOLD_PX` in [`sheet-machine.ts`](src/machine/sheet-machine.ts) (default **8** px). Body pointers stay armed in `idle` until vertical movement exceeds that threshold; chrome drags start immediately. Re-exported from the package as `SHEET_AXIS_THRESHOLD_PX` — there is no `Sheet` prop for this yet; change the constant (or export) if you need a different feel.
 
 Do **not** add `overflow-y-auto` to body content — the shell owns scroll on the body root (`data-sheet-scroll-root`).
 
@@ -90,7 +94,7 @@ Sheet                          ← snap props, transform, gesture wiring
 
 - `sheet` — adjust visible height
 - `scroll` — apply vertical scroll delta to body root
-- `pendingAxis` — at full + scroll top, wait 8px to pick scroll up vs sheet down
+- `pendingAxis` — at full + scroll top, wait until move slop to pick scroll up vs sheet down
 
 Chrome surface always uses `sheet` intent.
 
