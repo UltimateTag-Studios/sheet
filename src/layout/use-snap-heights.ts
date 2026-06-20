@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 
-import { normalizeHalfSnapFraction } from "./normalize-half-snap-fraction";
 import { measureCollapsedHeightPx, readFullHeightPx } from "./snap-heights";
 
 export type UseSheetSnapHeightsOptions = {
   chromeEl: HTMLElement | null;
-  reserveSpacerEl: HTMLElement | null;
+  /** Laid-out reserve spacer height in px — derived from the CSS length prop, not observed. */
+  reserveHeightPx: number;
   collapsedBottomInsetPx?: number;
-  halfSnapFraction?: number;
+  /** Already normalized half snap fraction (0–1). */
+  halfSnapFraction: number;
 };
 
 export type SheetSnapHeights = {
@@ -26,12 +27,10 @@ function heightsEqual(a: SheetSnapHeights, b: SheetSnapHeights): boolean {
 
 export function useSheetSnapHeights({
   chromeEl,
-  reserveSpacerEl,
+  reserveHeightPx,
   collapsedBottomInsetPx = 0,
   halfSnapFraction,
 }: UseSheetSnapHeightsOptions): SheetSnapHeights {
-  const resolvedHalfSnap = normalizeHalfSnapFraction(halfSnapFraction);
-
   const [heights, setHeights] = useState<SheetSnapHeights>(() => {
     const fullHeightPx = readFullHeightPx();
     return {
@@ -39,10 +38,10 @@ export function useSheetSnapHeights({
         chromeEl,
         collapsedBottomInsetPx,
         fullHeightPx,
-        resolvedHalfSnap,
-        reserveSpacerEl,
+        halfSnapFraction,
+        reserveHeightPx,
       ),
-      halfHeightPx: Math.round(fullHeightPx * resolvedHalfSnap),
+      halfHeightPx: Math.round(fullHeightPx * halfSnapFraction),
       fullHeightPx,
     };
   });
@@ -55,10 +54,10 @@ export function useSheetSnapHeights({
           chromeEl,
           collapsedBottomInsetPx,
           fullHeightPx,
-          resolvedHalfSnap,
-          reserveSpacerEl,
+          halfSnapFraction,
+          reserveHeightPx,
         ),
-        halfHeightPx: Math.round(fullHeightPx * resolvedHalfSnap),
+        halfHeightPx: Math.round(fullHeightPx * halfSnapFraction),
         fullHeightPx,
       };
       setHeights((current) => (heightsEqual(current, next) ? current : next));
@@ -67,14 +66,9 @@ export function useSheetSnapHeights({
     syncHeights();
 
     let resizeObserver: ResizeObserver | undefined;
-    if (typeof ResizeObserver !== "undefined") {
+    if (typeof ResizeObserver !== "undefined" && chromeEl) {
       resizeObserver = new ResizeObserver(syncHeights);
-      if (chromeEl) {
-        resizeObserver.observe(chromeEl);
-      }
-      if (reserveSpacerEl) {
-        resizeObserver.observe(reserveSpacerEl);
-      }
+      resizeObserver.observe(chromeEl);
     }
 
     window.addEventListener("resize", syncHeights);
@@ -85,7 +79,7 @@ export function useSheetSnapHeights({
       window.removeEventListener("resize", syncHeights);
       window.visualViewport?.removeEventListener("resize", syncHeights);
     };
-  }, [chromeEl, reserveSpacerEl, collapsedBottomInsetPx, resolvedHalfSnap]);
+  }, [chromeEl, reserveHeightPx, collapsedBottomInsetPx, halfSnapFraction]);
 
   return heights;
 }

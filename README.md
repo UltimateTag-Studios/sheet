@@ -99,6 +99,8 @@ Chrome surface always uses `sheet` intent.
 | `Sheet` | Root sheet + context provider |
 | `SheetLayout` | Default chrome/body structure |
 | `useSheetContext` | Live snap, heights, drag phase (custom layouts) |
+| `useSheetControlsContext` | Stable layout wiring (prefer in `SheetLayout` hot paths) |
+| `useSheetMetricsContext` | Volatile snap/height metrics |
 | `useCanBodyScroll` | Whether body root should use scroll vs drag overflow |
 | `isSheetAtCollapsedHeader` | Whether sheet is at collapsed header height (divider hide) |
 | `buildSheetStyle` / `buildSheetLayoutVars` | Handle geometry tokens |
@@ -112,7 +114,9 @@ Chrome surface always uses `sheet` intent.
 | `collapsedBottomInsetPx` | `0` | Extra collapsed height without DOM |
 | `sheetStyle` / `sheetHandleStyle` | — | CSS overrides (prefer theme CSS on `.sheet-slide`) |
 
-`SheetLayout` accepts optional `bottomReserve` (CSS height for `.sheet-bottom-reserve` spacer). Collapsed snap height includes chrome + spacer; pair with `bodyInnerStyle.paddingBottom` for scroll-end float gap above app chrome.
+`SheetLayout` accepts optional `bottomReserve` (CSS height for `.sheet-bottom-reserve` spacer). The shell reads its laid-out px height once per mount/resize (no `ResizeObserver` on the spacer — the value is your CSS length, resolved at layout time). Collapsed snap height = chrome + that px; pair with `bodyInnerStyle.paddingBottom` for scroll-end float gap above app chrome.
+
+During drag, transform updates write directly to `.sheet-slide` so React does not re-render every pointer frame. Context is split: **controls** (handlers, registrars) vs **metrics** (snap, heights).
 
 The sheet root is `position: fixed` with **no `z-index`**. Translate animation runs on **`.sheet-slide`** so the fixed root does not create a transform stacking context that jumps above later DOM siblings (tab bars, etc.). Stack order: render the map shell first, then app chrome that must sit on top.
 
@@ -126,6 +130,7 @@ Override semantic classes from `@siegetag/sheet/styles.css`:
 | `.sheet-slide` | Translated surface (background, border, shadow) |
 | `.sheet-handle` | Drag pill |
 | `.sheet-header` | Optional header content area |
+| `.sheet-header-interactive` | Opt-in: header controls receive pointer events (chrome drag surface disables them by default) |
 | `.sheet-divider` | Line between chrome and body (hidden at collapsed header via `data-sheet-collapsed-header`) |
 | `.sheet-bottom-reserve` | Fixed-height spacer for bottom chrome clearance (always in DOM when configured) |
 | `.sheet-body-root--scroll` | Body at full height (overflow scroll) |

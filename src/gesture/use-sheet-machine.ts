@@ -17,6 +17,8 @@ export type UseSheetMachineOptions = {
   fullHeightPx: number;
   onSnapChange?: (snap: SheetSnap) => void;
   onDragInteractionChange?: (isDragging: boolean) => void;
+  /** Called after every dispatch — used for direct DOM updates during drag. */
+  onResult?: (event: SheetMachineEvent, result: SheetMachineResult) => void;
 };
 
 function applyEffects(
@@ -47,12 +49,16 @@ export function useSheetMachine({
   fullHeightPx,
   onSnapChange,
   onDragInteractionChange,
+  onResult,
 }: UseSheetMachineOptions): {
   state: SheetMachineState;
   dispatch: (event: SheetMachineEvent) => SheetMachineResult;
 } {
   const callbacksRef = useRef({ onSnapChange, onDragInteractionChange });
   callbacksRef.current = { onSnapChange, onDragInteractionChange };
+
+  const onResultRef = useRef(onResult);
+  onResultRef.current = onResult;
 
   const [state, setState] = useState<SheetMachineState>(() =>
     createInitialSheetMachineState({
@@ -64,14 +70,20 @@ export function useSheetMachine({
   );
 
   const stateRef = useRef(state);
-  stateRef.current = state;
 
   const dispatch = useCallback(
     (event: SheetMachineEvent): SheetMachineResult => {
       const result = reduceSheetMachine(stateRef.current, event);
       applyEffects(result.effects, callbacksRef.current);
       stateRef.current = result.state;
-      setState(result.state);
+      onResultRef.current?.(event, result);
+
+      const skipRender =
+        event.type === "pointerMove" && result.state.phase === "dragging";
+      if (!skipRender) {
+        setState(result.state);
+      }
+
       return result;
     },
     [],
@@ -90,7 +102,10 @@ export function useSheetMachine({
     if (controlledSnap === undefined) {
       return;
     }
-    if (stateRef.current.phase === "dragging") {
+    if (
+      stateRef.current.phase === "dragging" ||
+      stateRef.current.phase === "settling"
+    ) {
       return;
     }
     if (stateRef.current.restingSnap === controlledSnap) {

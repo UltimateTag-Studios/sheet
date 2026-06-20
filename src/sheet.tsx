@@ -1,5 +1,12 @@
 import type { CSSProperties, ReactNode, TransitionEvent } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import { SheetContextProvider } from "./context/sheet-context";
 import { useSheetMachine } from "./gesture/use-sheet-machine";
@@ -10,10 +17,12 @@ import {
   DEFAULT_HALF_SNAP_FRACTION,
   normalizeHalfSnapFraction,
 } from "./layout/normalize-half-snap-fraction";
+import { canBodyScroll, sheetBodyRootClass } from "./layout/scroll-mode";
 import { sheetTransformStyle } from "./layout/sheet-transform";
 import { readVisibleSheetHeightPx } from "./layout/snap-heights";
 import type { SheetSnap } from "./layout/snap-math";
 import { useSheetSnapHeights } from "./layout/use-snap-heights";
+import type { SheetMachineState } from "./machine/sheet-machine";
 
 export type { SheetSnap };
 export { DEFAULT_HALF_SNAP_FRACTION };
@@ -40,6 +49,53 @@ export type SheetProps = {
   }) => void;
 };
 
+function syncSheetDomFrame(args: {
+  machineState: SheetMachineState;
+  sheetRoot: HTMLDivElement | null;
+  sheetSlide: HTMLDivElement | null;
+  bodyRoot: HTMLDivElement | null;
+  canBodyScrollRef: React.MutableRefObject<boolean>;
+}): void {
+  const { machineState, sheetRoot, sheetSlide, bodyRoot } = args;
+
+  if (sheetSlide) {
+    const frameStyle = sheetTransformStyle(
+      machineState.visibleHeightPx,
+      "dragging",
+    );
+    sheetSlide.style.transform = frameStyle.transform ?? "";
+    sheetSlide.style.transition = frameStyle.transition ?? "";
+  }
+
+  if (sheetRoot) {
+    const atCollapsedHeader = isSheetAtCollapsedHeader({
+      sheetSnap: machineState.restingSnap,
+      isDragging: true,
+      visibleHeightPx: machineState.visibleHeightPx,
+      collapsedHeightPx: machineState.collapsedHeightPx,
+    });
+    if (atCollapsedHeader) {
+      sheetRoot.setAttribute("data-sheet-collapsed-header", "");
+    } else {
+      sheetRoot.removeAttribute("data-sheet-collapsed-header");
+    }
+    sheetRoot.dataset.sheetPhase = "dragging";
+  }
+
+  const nextCanBodyScroll = canBodyScroll({
+    sheetSnap: machineState.restingSnap,
+    visibleHeightPx: machineState.visibleHeightPx,
+    fullHeightPx: machineState.fullHeightPx,
+    isDragging: true,
+  });
+  if (nextCanBodyScroll !== args.canBodyScrollRef.current) {
+    args.canBodyScrollRef.current = nextCanBodyScroll;
+    if (bodyRoot) {
+      bodyRoot.className = sheetBodyRootClass(nextCanBodyScroll);
+    }
+  }
+}
+
 export function Sheet({
   children,
   snap,
@@ -57,15 +113,18 @@ export function Sheet({
   const onSnapHeightsChangeRef = useRef(onSnapHeightsChange);
   onSnapHeightsChangeRef.current = onSnapHeightsChange;
 
+  const sheetRootRef = useRef<HTMLDivElement | null>(null);
+  const sheetSlideRef = useRef<HTMLDivElement | null>(null);
+  const bodyRootRef = useRef<HTMLDivElement | null>(null);
+  const canBodyScrollRef = useRef(false);
+
   const [chromeEl, setChromeEl] = useState<HTMLElement | null>(null);
-  const [reserveSpacerEl, setReserveSpacerEl] = useState<HTMLElement | null>(
-    null,
-  );
+  const [reserveHeightPx, setReserveHeightPx] = useState(0);
 
   const { collapsedHeightPx, halfHeightPx, fullHeightPx } = useSheetSnapHeights(
     {
       chromeEl,
-      reserveSpacerEl,
+      reserveHeightPx,
       collapsedBottomInsetPx,
       halfSnapFraction: resolvedHalfSnap,
     },
@@ -75,6 +134,22 @@ export function Sheet({
     onSnapHeightsChangeRef.current?.({ collapsedHeightPx, fullHeightPx });
   }, [collapsedHeightPx, fullHeightPx]);
 
+  const syncReserveHeightPx = useCallback((heightPx: number) => {
+    setReserveHeightPx((current) =>
+      current === heightPx ? current : heightPx,
+    );
+  }, []);
+
+  const applyDragFrame = useCallback((machineState: SheetMachineState) => {
+    syncSheetDomFrame({
+      machineState,
+      sheetRoot: sheetRootRef.current,
+      sheetSlide: sheetSlideRef.current,
+      bodyRoot: bodyRootRef.current,
+      canBodyScrollRef,
+    });
+  }, []);
+
   const { state, dispatch } = useSheetMachine({
     restingSnap: snap ?? defaultSnap,
     controlledSnap: snap,
@@ -83,10 +158,55 @@ export function Sheet({
     fullHeightPx,
     onSnapChange,
     onDragInteractionChange,
+    onResult: (event, result) => {
+      if (event.type === "pointerMove" && result.state.phase === "dragging") {
+        applyDragFrame(result.state);
+      }
+    },
   });
+
+  const [canBodyScrollEnabled, setCanBodyScrollEnabled] = useState(() =>
+    canBodyScroll({
+      sheetSnap: state.restingSnap,
+      visibleHeightPx: state.visibleHeightPx,
+      fullHeightPx: state.fullHeightPx,
+      isDragging: state.phase === "dragging",
+    }),
+  );
+
+  useEffect(() => {
+    if (state.phase === "dragging") {
+      return;
+    }
+    const next = canBodyScroll({
+      sheetSnap: state.restingSnap,
+      visibleHeightPx: state.visibleHeightPx,
+      fullHeightPx: state.fullHeightPx,
+      isDragging: false,
+    });
+    canBodyScrollRef.current = next;
+    setCanBodyScrollEnabled((current) => (current === next ? current : next));
+  }, [
+    state.phase,
+    state.restingSnap,
+    state.visibleHeightPx,
+    state.fullHeightPx,
+  ]);
 
   const { readScrollTop, applyBodyScrollDelta, registerBodyEl } =
     useSheetBodyScroll(state.restingSnap);
+
+  const registerBodyRoot = useCallback(
+    (node: HTMLDivElement | null) => {
+      bodyRootRef.current = node;
+      registerBodyEl(node);
+    },
+    [registerBodyEl],
+  );
+
+  const registerChromeMeasure = useCallback((node: HTMLElement | null) => {
+    setChromeEl(node);
+  }, []);
 
   const pointerHandlers = useSheetPointerHandlers(
     dispatch,
@@ -94,18 +214,22 @@ export function Sheet({
     applyBodyScrollDelta,
   );
 
-  const registerChromeMeasure = useCallback((node: HTMLElement | null) => {
-    setChromeEl(node);
-  }, []);
-
-  const registerReserveSpacer = useCallback((node: HTMLElement | null) => {
-    setReserveSpacerEl(node);
-  }, []);
-
   const transformStyle = useMemo(
     () => sheetTransformStyle(state.visibleHeightPx, state.phase),
     [state.phase, state.visibleHeightPx],
   );
+
+  useLayoutEffect(() => {
+    if (state.phase === "dragging") {
+      return;
+    }
+    const slide = sheetSlideRef.current;
+    if (!slide) {
+      return;
+    }
+    slide.style.transform = transformStyle.transform ?? "";
+    slide.style.transition = transformStyle.transition ?? "";
+  }, [state.phase, transformStyle]);
 
   const onTransitionEnd = useCallback(
     (event: TransitionEvent<HTMLDivElement>) => {
@@ -122,33 +246,6 @@ export function Sheet({
     [dispatch, state.phase],
   );
 
-  const contextValue = useMemo(
-    () => ({
-      sheetSnap: state.restingSnap,
-      visibleHeightPx: state.visibleHeightPx,
-      collapsedHeightPx,
-      fullHeightPx,
-      isDragging: state.phase === "dragging",
-      pointerHandlers,
-      sheetHandleStyle,
-      registerBodyEl,
-      registerChromeMeasure,
-      registerReserveSpacer,
-    }),
-    [
-      collapsedHeightPx,
-      fullHeightPx,
-      pointerHandlers,
-      registerBodyEl,
-      registerChromeMeasure,
-      registerReserveSpacer,
-      sheetHandleStyle,
-      state.phase,
-      state.restingSnap,
-      state.visibleHeightPx,
-    ],
-  );
-
   const atCollapsedHeader = isSheetAtCollapsedHeader({
     sheetSnap: state.restingSnap,
     isDragging: state.phase === "dragging",
@@ -156,14 +253,52 @@ export function Sheet({
     collapsedHeightPx,
   });
 
+  const controlsValue = useMemo(
+    () => ({
+      pointerHandlers,
+      sheetHandleStyle,
+      canBodyScroll: canBodyScrollEnabled,
+      registerBodyEl: registerBodyRoot,
+      registerChromeMeasure,
+      syncReserveHeightPx,
+    }),
+    [
+      canBodyScrollEnabled,
+      pointerHandlers,
+      registerBodyRoot,
+      registerChromeMeasure,
+      sheetHandleStyle,
+      syncReserveHeightPx,
+    ],
+  );
+
+  const metricsValue = useMemo(
+    () => ({
+      sheetSnap: state.restingSnap,
+      visibleHeightPx: state.visibleHeightPx,
+      collapsedHeightPx,
+      fullHeightPx,
+      isDragging: state.phase === "dragging",
+    }),
+    [
+      collapsedHeightPx,
+      fullHeightPx,
+      state.phase,
+      state.restingSnap,
+      state.visibleHeightPx,
+    ],
+  );
+
   return (
     <div
+      ref={sheetRootRef}
       className="sheet"
       style={{ bottom: "0px" }}
       data-sheet-phase={state.phase}
       data-sheet-collapsed-header={atCollapsedHeader ? "" : undefined}
     >
       <div
+        ref={sheetSlideRef}
         className="sheet-slide"
         style={{
           ...sheetStyle,
@@ -171,7 +306,7 @@ export function Sheet({
         }}
         onTransitionEnd={onTransitionEnd}
       >
-        <SheetContextProvider value={contextValue}>
+        <SheetContextProvider controls={controlsValue} metrics={metricsValue}>
           <div className="sheet-inner">{children}</div>
         </SheetContextProvider>
       </div>

@@ -1,4 +1,9 @@
-export { useCanBodyScroll, useSheetContext } from "./context/sheet-context";
+export {
+  useCanBodyScroll,
+  useSheetContext,
+  useSheetControlsContext,
+  useSheetMetricsContext,
+} from "./context/sheet-context";
 export { isSheetAtCollapsedHeader } from "./layout/collapsed-header-state";
 export { normalizeHalfSnapFraction } from "./layout/normalize-half-snap-fraction";
 export type {

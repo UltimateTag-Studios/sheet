@@ -4,7 +4,7 @@ import { SheetDivider } from "./divider";
 import { SheetHandle } from "./handle";
 
 export type SheetChromeProps = {
-  measureRef: (node: HTMLDivElement | null) => void;
+  measureRef: (node: HTMLElement | null) => void;
   handleStyle?: CSSProperties;
   style?: CSSProperties;
   children?: ReactNode;

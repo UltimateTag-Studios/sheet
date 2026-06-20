@@ -1,9 +1,12 @@
 import type { CSSProperties, ReactNode } from "react";
-import { useCallback } from "react";
+import { useLayoutEffect, useRef } from "react";
 
 import { SheetHandleSpacer } from "./components/handle-spacer";
 import { SheetChrome, SheetDivider } from "./components/sheet-chrome";
-import { useCanBodyScroll, useSheetContext } from "./context/sheet-context";
+import {
+  useCanBodyScroll,
+  useSheetControlsContext,
+} from "./context/sheet-context";
 import { sheetBodyRootClass } from "./layout/scroll-mode";
 
 export type SheetLayoutProps = {
@@ -12,7 +15,7 @@ export type SheetLayoutProps = {
   body: ReactNode;
   headerStyle?: CSSProperties;
   bodyInnerStyle?: CSSProperties;
-  /** Always-on bottom reserve spacer height (e.g. tab bar clearance). */
+  /** Always-on bottom reserve spacer height (e.g. tab bar clearance). CSS length. */
   bottomReserve?: string;
 };
 
@@ -27,38 +30,38 @@ export function SheetLayout({
   const {
     registerBodyEl,
     registerChromeMeasure,
-    registerReserveSpacer,
+    syncReserveHeightPx,
     pointerHandlers,
     sheetHandleStyle,
-  } = useSheetContext();
+  } = useSheetControlsContext();
   const canBodyScroll = useCanBodyScroll();
   const hasHeader = header != null;
+  const reserveSpacerRef = useRef<HTMLDivElement | null>(null);
 
-  const chromeMeasureRef = useCallback(
-    (node: HTMLDivElement | null) => {
-      registerChromeMeasure(node);
-    },
-    [registerChromeMeasure],
-  );
+  useLayoutEffect(() => {
+    if (!bottomReserve) {
+      syncReserveHeightPx(0);
+      return;
+    }
 
-  const bodyRootRef = useCallback(
-    (node: HTMLDivElement | null) => {
-      registerBodyEl(node);
-    },
-    [registerBodyEl],
-  );
+    const syncReserveHeight = () => {
+      syncReserveHeightPx(reserveSpacerRef.current?.offsetHeight ?? 0);
+    };
 
-  const reserveSpacerRef = useCallback(
-    (node: HTMLDivElement | null) => {
-      registerReserveSpacer(node);
-    },
-    [registerReserveSpacer],
-  );
+    syncReserveHeight();
+    window.addEventListener("resize", syncReserveHeight);
+    window.visualViewport?.addEventListener("resize", syncReserveHeight);
+
+    return () => {
+      window.removeEventListener("resize", syncReserveHeight);
+      window.visualViewport?.removeEventListener("resize", syncReserveHeight);
+    };
+  }, [bottomReserve, syncReserveHeightPx]);
 
   return (
     <div className="sheet-layers">
       <SheetChrome
-        measureRef={chromeMeasureRef}
+        measureRef={registerChromeMeasure}
         handleStyle={sheetHandleStyle}
         style={headerStyle}
         onChromePointerDown={pointerHandlers.onChromePointerDown}
@@ -72,7 +75,7 @@ export function SheetLayout({
         ) : null}
       </SheetChrome>
       <div
-        ref={bodyRootRef}
+        ref={registerBodyEl}
         className={sheetBodyRootClass(canBodyScroll)}
         data-sheet-scroll-root
         onPointerDown={pointerHandlers.onBodyPointerDown}

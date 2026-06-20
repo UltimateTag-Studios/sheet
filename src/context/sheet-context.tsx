@@ -1,52 +1,107 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { createContext, useContext } from "react";
 
 import type { SheetPointerHandlers } from "../gesture/use-sheet-pointer-handlers";
-import { canBodyScroll } from "../layout/scroll-mode";
 import type { SheetSnap } from "../layout/snap-math";
 
-export type SheetContextValue = {
+/** Stable layout wiring — does not change during drag frames. */
+export type SheetControlsContextValue = {
+  pointerHandlers: SheetPointerHandlers;
+  sheetHandleStyle?: CSSProperties;
+  canBodyScroll: boolean;
+  registerBodyEl: (node: HTMLDivElement | null) => void;
+  registerChromeMeasure: (node: HTMLElement | null) => void;
+  /** Reports laid-out reserve spacer height in px (from the CSS length prop). */
+  syncReserveHeightPx: (heightPx: number) => void;
+};
+
+/** Live snap / height metrics — changes during gestures. */
+export type SheetMetricsContextValue = {
   sheetSnap: SheetSnap;
   visibleHeightPx: number;
   collapsedHeightPx: number;
   fullHeightPx: number;
   isDragging: boolean;
-  pointerHandlers: SheetPointerHandlers;
-  sheetHandleStyle?: React.CSSProperties;
-  registerBodyEl: (node: HTMLDivElement | null) => void;
-  registerChromeMeasure: (node: HTMLElement | null) => void;
-  registerReserveSpacer: (node: HTMLElement | null) => void;
 };
 
-const SheetContext = createContext<SheetContextValue | null>(null);
+export type SheetContextValue = SheetControlsContextValue &
+  SheetMetricsContextValue;
 
-export function SheetContextProvider({
+const SheetControlsContext = createContext<SheetControlsContextValue | null>(
+  null,
+);
+const SheetMetricsContext = createContext<SheetMetricsContextValue | null>(
+  null,
+);
+
+export function SheetControlsProvider({
   value,
   children,
 }: {
-  value: SheetContextValue;
+  value: SheetControlsContextValue;
   children: ReactNode;
 }) {
   return (
-    <SheetContext.Provider value={value}>{children}</SheetContext.Provider>
+    <SheetControlsContext.Provider value={value}>
+      {children}
+    </SheetControlsContext.Provider>
   );
 }
 
-export function useSheetContext(): SheetContextValue {
-  const value = useContext(SheetContext);
+export function SheetMetricsProvider({
+  value,
+  children,
+}: {
+  value: SheetMetricsContextValue;
+  children: ReactNode;
+}) {
+  return (
+    <SheetMetricsContext.Provider value={value}>
+      {children}
+    </SheetMetricsContext.Provider>
+  );
+}
+
+export function SheetContextProvider({
+  controls,
+  metrics,
+  children,
+}: {
+  controls: SheetControlsContextValue;
+  metrics: SheetMetricsContextValue;
+  children: ReactNode;
+}) {
+  return (
+    <SheetControlsProvider value={controls}>
+      <SheetMetricsProvider value={metrics}>{children}</SheetMetricsProvider>
+    </SheetControlsProvider>
+  );
+}
+
+export function useSheetControlsContext(): SheetControlsContextValue {
+  const value = useContext(SheetControlsContext);
   if (!value) {
-    throw new Error("useSheetContext must be used within Sheet");
+    throw new Error("useSheetControlsContext must be used within Sheet");
   }
   return value;
 }
 
+export function useSheetMetricsContext(): SheetMetricsContextValue {
+  const value = useContext(SheetMetricsContext);
+  if (!value) {
+    throw new Error("useSheetMetricsContext must be used within Sheet");
+  }
+  return value;
+}
+
+/** Full sheet context — prefer controls/metrics hooks in layout hot paths. */
+export function useSheetContext(): SheetContextValue {
+  return {
+    ...useSheetControlsContext(),
+    ...useSheetMetricsContext(),
+  };
+}
+
 export function useCanBodyScroll(): boolean {
-  const { sheetSnap, visibleHeightPx, fullHeightPx, isDragging } =
-    useSheetContext();
-  return canBodyScroll({
-    sheetSnap,
-    visibleHeightPx,
-    fullHeightPx,
-    isDragging,
-  });
+  return useSheetControlsContext().canBodyScroll;
 }

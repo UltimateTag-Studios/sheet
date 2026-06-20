@@ -67,6 +67,12 @@
   pointer-events: none;
 }
 
+/** Opt in on header content (or descendants) that must receive clicks/taps. */
+.sheet-header-interactive,
+.sheet-header-interactive * {
+  pointer-events: auto;
+}
+
 .sheet-header {
   flex-shrink: 0;
 }
