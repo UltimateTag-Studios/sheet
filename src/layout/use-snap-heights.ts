@@ -66,25 +66,22 @@ export function useSheetSnapHeights({
 
     syncHeights();
 
-    const observers: ResizeObserver[] = [];
+    let resizeObserver: ResizeObserver | undefined;
     if (typeof ResizeObserver !== "undefined") {
-      const observer = new ResizeObserver(syncHeights);
+      resizeObserver = new ResizeObserver(syncHeights);
       if (chromeEl) {
-        observer.observe(chromeEl);
+        resizeObserver.observe(chromeEl);
       }
       if (reserveSpacerEl) {
-        observer.observe(reserveSpacerEl);
+        resizeObserver.observe(reserveSpacerEl);
       }
-      observers.push(observer);
     }
 
     window.addEventListener("resize", syncHeights);
     window.visualViewport?.addEventListener("resize", syncHeights);
 
     return () => {
-      for (const observer of observers) {
-        observer.disconnect();
-      }
+      resizeObserver?.disconnect();
       window.removeEventListener("resize", syncHeights);
       window.visualViewport?.removeEventListener("resize", syncHeights);
     };

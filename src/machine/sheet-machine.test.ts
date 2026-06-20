@@ -376,7 +376,7 @@ describe("reduceSheetMachine", () => {
     });
   });
 
-  it("measure updates visible height while settling after collapsed chrome grows", () => {
+  it("stores measured heights during settling without interrupting animation", () => {
     const initial = createInitialSheetMachineState({
       restingSnap: "collapsed",
       collapsedHeightPx: 150,
@@ -389,15 +389,22 @@ describe("reduceSheetMachine", () => {
       visibleHeightPx: 150,
     };
 
-    const result = reduceSheetMachine(settling, {
+    const measured = reduceSheetMachine(settling, {
       type: "measure",
       collapsedHeightPx: 210,
       halfHeightPx: 350,
       fullHeightPx: 700,
     });
 
-    expect(result.state.visibleHeightPx).toBe(210);
-    expect(result.state.collapsedHeightPx).toBe(210);
+    expect(measured.state.visibleHeightPx).toBe(150);
+    expect(measured.state.collapsedHeightPx).toBe(210);
+
+    const settled = reduceSheetMachine(measured.state, {
+      type: "settleComplete",
+    });
+
+    expect(settled.state.phase).toBe("idle");
+    expect(settled.state.visibleHeightPx).toBe(210);
   });
 
   it("measure does not override visible height while dragging", () => {

@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode, TransitionEvent } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { SheetContextProvider } from "./context/sheet-context";
 import { useSheetMachine } from "./gesture/use-sheet-machine";
@@ -53,6 +53,10 @@ export function Sheet({
   onSnapHeightsChange,
 }: SheetProps) {
   const resolvedHalfSnap = normalizeHalfSnapFraction(halfSnapFraction);
+
+  const onSnapHeightsChangeRef = useRef(onSnapHeightsChange);
+  onSnapHeightsChangeRef.current = onSnapHeightsChange;
+
   const [chromeEl, setChromeEl] = useState<HTMLElement | null>(null);
   const [reserveSpacerEl, setReserveSpacerEl] = useState<HTMLElement | null>(
     null,
@@ -68,8 +72,8 @@ export function Sheet({
   );
 
   useEffect(() => {
-    onSnapHeightsChange?.({ collapsedHeightPx, fullHeightPx });
-  }, [collapsedHeightPx, fullHeightPx, onSnapHeightsChange]);
+    onSnapHeightsChangeRef.current?.({ collapsedHeightPx, fullHeightPx });
+  }, [collapsedHeightPx, fullHeightPx]);
 
   const { state, dispatch } = useSheetMachine({
     restingSnap: snap ?? defaultSnap,

@@ -115,7 +115,6 @@ function createGesture(args: {
   startHeightPx: number;
   intent: SheetGestureIntent;
   surface: SheetPointerSurface;
-  scrollTopPx: number;
 }): SheetGesture {
   return {
     pointerId: args.pointerId,
@@ -184,7 +183,22 @@ export function reduceSheetMachine(
     case "setSnap":
       return reduceSetSnap(state, event);
     case "settleComplete":
-      return { state: { ...state, phase: "idle" }, effects: [] };
+      return {
+        state: {
+          ...state,
+          phase: "idle",
+          visibleHeightPx: clampHeight(
+            state,
+            heightForSnap(
+              state.restingSnap,
+              state.collapsedHeightPx,
+              state.halfHeightPx,
+              state.fullHeightPx,
+            ),
+          ),
+        },
+        effects: [],
+      };
     case "pointerDown":
       return reducePointerDown(state, event);
     case "pointerMove":
@@ -207,7 +221,7 @@ function reduceMeasure(
   };
   const nextState = { ...state, ...measuredHeights };
 
-  if (state.phase === "dragging") {
+  if (state.phase === "dragging" || state.phase === "settling") {
     return {
       state: nextState,
       effects: [],
@@ -272,7 +286,6 @@ function reducePointerDown(
       startHeightPx: state.visibleHeightPx,
       intent: "sheet",
       surface: "chrome",
-      scrollTopPx: event.scrollTopPx,
     });
 
     return {
@@ -294,7 +307,6 @@ function reducePointerDown(
     startHeightPx: state.visibleHeightPx,
     intent,
     surface: "body",
-    scrollTopPx: event.scrollTopPx,
   });
 
   return {

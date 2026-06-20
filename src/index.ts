@@ -18,10 +18,8 @@ export {
   FALLBACK_FULL_HEIGHT_PX,
   measureChromeHeightPx,
   measureCollapsedHeightPx,
-  measureHandleBlockHeightPx,
   readFullHeightPx,
   readVisibleSheetHeightPx,
-  sheetSnapPointPx,
 } from "./layout/snap-heights";
 export type { SheetProps, SheetSnap } from "./sheet";
 export {

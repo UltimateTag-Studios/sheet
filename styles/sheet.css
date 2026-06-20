@@ -37,8 +37,10 @@
   backdrop-filter: blur(24px);
 }
 
-.sheet[data-sheet-phase="dragging"] .sheet-slide {
+.sheet[data-sheet-phase="dragging"] .sheet-slide,
+.sheet[data-sheet-phase="settling"] .sheet-slide {
   touch-action: none;
+  will-change: transform;
 }
 
 .sheet-inner {
