@@ -11,6 +11,7 @@ import type {
   SheetMachineState,
   SheetPointerSurface,
 } from "../machine/sheet-machine";
+import { activateSheetClickTarget } from "./sheet-click-activation";
 
 export type SheetPointerHandlers = {
   onChromePointerDown: (event: ReactPointerEvent<HTMLElement>) => void;
@@ -64,6 +65,8 @@ export function useSheetPointerHandlers(
   const captureTargetRef = useRef<HTMLElement | null>(null);
   const draggingRef = useRef(false);
   const gestureCommittedRef = useRef(false);
+  const activationTargetRef = useRef<EventTarget | null>(null);
+  const touchTapRef = useRef(false);
   const documentListenersRef = useRef<{
     move: (event: PointerEvent) => void;
     up: (event: PointerEvent) => void;
@@ -100,6 +103,8 @@ export function useSheetPointerHandlers(
       capturedPointerIdRef.current = null;
       draggingRef.current = false;
       gestureCommittedRef.current = false;
+      activationTargetRef.current = null;
+      touchTapRef.current = false;
       removeDocumentListeners();
     },
     [removeDocumentListeners],
@@ -174,6 +179,10 @@ export function useSheetPointerHandlers(
         return;
       }
 
+      const shouldActivateTap =
+        touchTapRef.current && !gestureCommittedRef.current;
+      const activationTarget = activationTargetRef.current;
+
       if (draggingRef.current || gestureCommittedRef.current) {
         event.preventDefault();
       }
@@ -184,6 +193,10 @@ export function useSheetPointerHandlers(
       });
       scrollMomentumRef.current.releaseScrollMomentum();
       endCapture(event.pointerId);
+
+      if (shouldActivateTap) {
+        activateSheetClickTarget(activationTarget);
+      }
     },
     [endCapture],
   );
@@ -198,6 +211,9 @@ export function useSheetPointerHandlers(
         scrollMomentumRef.current.cancelScrollMomentum();
         scrollMomentumRef.current.clearScrollPointerTracking();
         gestureCommittedRef.current = false;
+        activationTargetRef.current = surface === "body" ? event.target : null;
+        touchTapRef.current =
+          surface === "body" && event.pointerType === "touch";
 
         const result = dispatchRef.current({
           type: "pointerDown",

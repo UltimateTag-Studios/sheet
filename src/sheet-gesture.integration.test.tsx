@@ -109,12 +109,18 @@ function stubScrollRootDimensions(
   });
 }
 
-function pointerDown(surface: Element, pointerId: number, clientY: number) {
+function pointerDown(
+  surface: Element,
+  pointerId: number,
+  clientY: number,
+  pointerType = "mouse",
+) {
   act(() => {
     fireEvent.pointerDown(surface, {
       pointerId,
       clientY,
       button: 0,
+      pointerType,
     });
   });
 }
@@ -131,12 +137,13 @@ function pointerMove(pointerId: number, clientY: number) {
   });
 }
 
-function pointerUp(pointerId: number, clientY: number) {
+function pointerUp(pointerId: number, clientY: number, pointerType = "mouse") {
   act(() => {
     document.dispatchEvent(
       new PointerEvent("pointerup", {
         pointerId,
         clientY,
+        pointerType,
         bubbles: true,
       }),
     );
@@ -401,6 +408,29 @@ describe("Sheet gesture integration", () => {
     expect(
       document.querySelector(".sheet")?.getAttribute("data-sheet-phase"),
     ).toBe("dragging");
+  });
+
+  it("activates a body button on the first touch tap at half snap", () => {
+    vi.useFakeTimers();
+
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: 800,
+      writable: true,
+    });
+
+    render(<TestHalfSheetWithBodyButton />);
+
+    const button = screen.getByTestId("body-action");
+    pointerDown(button, 10, 400, "touch");
+    pointerUp(10, 400, "touch");
+
+    act(() => {
+      vi.runAllTimers();
+    });
+
+    expect(screen.getByTestId("selected").textContent).toBe("yes");
+    vi.useRealTimers();
   });
 
   it("does not steal first body tap at half snap before move slop", () => {
