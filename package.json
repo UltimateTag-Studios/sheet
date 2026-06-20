@@ -1,0 +1,44 @@
+{
+  "name": "@siegetag/sheet",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Generic bottom sheet with unified gesture state machine for React web apps",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./styles.css": "./styles/sheet.css"
+  },
+  "files": [
+    "styles/sheet.css",
+    "src",
+    "package.json"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format .",
+    "format:write": "biome format --write .",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.3.14",
+    "@testing-library/react": "^16.3.2",
+    "@types/react": "^19.1.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^4.7.0",
+    "jsdom": "^29.0.2",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "typescript": "~5.9.3",
+    "vitest": "^2.1.9"
+  }
+}

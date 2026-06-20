@@ -1,0 +1,99 @@
+/*
+ * @siegetag/sheet — layout + semantic surfaces.
+ * Import once: import "@siegetag/sheet/styles.css"
+ * Override theme tokens (radius, border, background) in your app.
+ */
+.sheet-drawer {
+  --sheet-handle-margin-top: 0.75rem;
+  --sheet-handle-bar-height: 0.25rem;
+  --sheet-handle-margin-bottom: 0.75rem;
+  --sheet-handle-height: calc(
+    var(--sheet-handle-margin-top) +
+    var(--sheet-handle-bar-height) +
+    var(--sheet-handle-margin-bottom)
+  );
+
+  position: fixed;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  outline: none;
+
+  border-radius: 0.75rem;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-bottom: none;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.08);
+  backdrop-filter: blur(24px);
+}
+
+.sheet-drawer[data-sheet-phase="dragging"] {
+  touch-action: none;
+}
+
+.sheet-drawer-inner {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.sheet-layers {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+/** Handle + optional header + divider — single drag surface. */
+.sheet-chrome {
+  flex-shrink: 0;
+  touch-action: none;
+}
+
+.sheet-chrome > * {
+  pointer-events: none;
+}
+
+.sheet-header {
+  flex-shrink: 0;
+}
+
+.sheet-drawer-handle {
+  margin-top: var(--sheet-handle-margin-top);
+  margin-bottom: var(--sheet-handle-margin-bottom);
+  margin-inline: auto;
+  flex-shrink: 0;
+  height: var(--sheet-handle-bar-height);
+  width: 2.5rem;
+  border-radius: 9999px;
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.sheet-divider {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+/** Mirrors handle block below header content for vertical balance with the handle bar. */
+.sheet-handle-spacer {
+  flex-shrink: 0;
+  height: var(--sheet-handle-height);
+}
+
+.sheet-body-root {
+  min-height: 0;
+  flex: 1;
+  overscroll-behavior-y: none;
+}
+
+.sheet-body-root--scroll {
+  overflow-y: auto;
+}
+
+.sheet-body-root--drag {
+  overflow-y: hidden;
+  touch-action: none;
+}
