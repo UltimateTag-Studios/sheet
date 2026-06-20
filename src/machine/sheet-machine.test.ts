@@ -21,7 +21,7 @@ describe("reduceSheetMachine", () => {
     expect(state.phase).toBe("idle");
   });
 
-  it("enters dragging with sheet intent below full height", () => {
+  it("arms sheet intent below full height without dragging until move slop", () => {
     const initial = createInitialSheetMachineState({
       restingSnap: "half",
       ...baseHeights,
@@ -35,9 +35,33 @@ describe("reduceSheetMachine", () => {
       surface: "body",
     });
 
-    expect(result.state.phase).toBe("dragging");
+    expect(result.state.phase).toBe("idle");
     expect(result.state.gesture?.intent).toBe("sheet");
-    expect(result.effects).toContainEqual({ type: "notifyDragStart" });
+    expect(result.effects).toEqual([]);
+  });
+
+  it("clears armed body gesture on tap release without move", () => {
+    const initial = createInitialSheetMachineState({
+      restingSnap: "half",
+      ...baseHeights,
+    });
+
+    const armed = reduceSheetMachine(initial, {
+      type: "pointerDown",
+      pointerId: 1,
+      clientY: 400,
+      scrollTopPx: 0,
+      surface: "body",
+    }).state;
+
+    const result = reduceSheetMachine(armed, {
+      type: "pointerUp",
+      pointerId: 1,
+    });
+
+    expect(result.state.phase).toBe("idle");
+    expect(result.state.gesture).toBeNull();
+    expect(result.effects).toEqual([]);
   });
 
   it("enters scroll intent when body is scrolled at full height", () => {
@@ -54,7 +78,7 @@ describe("reduceSheetMachine", () => {
       surface: "body",
     });
 
-    expect(result.state.phase).toBe("dragging");
+    expect(result.state.phase).toBe("idle");
     expect(result.state.gesture?.intent).toBe("scroll");
     expect(result.effects).toEqual([]);
   });
@@ -118,6 +142,7 @@ describe("reduceSheetMachine", () => {
       surface: "body",
     });
 
+    expect(result.state.phase).toBe("idle");
     expect(result.state.gesture?.intent).toBe("pendingAxis");
     expect(result.effects).toEqual([]);
   });

@@ -8,6 +8,7 @@ import {
 import type {
   SheetMachineEvent,
   SheetMachineResult,
+  SheetMachineState,
   SheetPointerSurface,
 } from "../machine/sheet-machine";
 
@@ -55,6 +56,7 @@ export function useSheetPointerHandlers(
 ): SheetPointerHandlers {
   const capturedPointerIdRef = useRef<number | null>(null);
   const captureTargetRef = useRef<HTMLElement | null>(null);
+  const draggingRef = useRef(false);
   const documentListenersRef = useRef<{
     move: (event: PointerEvent) => void;
     up: (event: PointerEvent) => void;
@@ -87,6 +89,7 @@ export function useSheetPointerHandlers(
       }
       captureTargetRef.current = null;
       capturedPointerIdRef.current = null;
+      draggingRef.current = false;
       removeDocumentListeners();
     },
     [removeDocumentListeners],
@@ -112,6 +115,21 @@ export function useSheetPointerHandlers(
     [],
   );
 
+  const ensureDraggingCapture = useCallback(
+    (event: PointerEvent, state: SheetMachineState) => {
+      if (state.phase !== "dragging" || draggingRef.current) {
+        return;
+      }
+
+      draggingRef.current = true;
+      const captureTarget = captureTargetRef.current;
+      if (captureTarget) {
+        trySetPointerCapture(captureTarget, event.pointerId);
+      }
+    },
+    [],
+  );
+
   const onDocumentPointerMove = useCallback(
     (event: PointerEvent) => {
       if (capturedPointerIdRef.current !== event.pointerId) {
@@ -125,9 +143,10 @@ export function useSheetPointerHandlers(
         scrollTopPx: readScrollTopRef.current(),
       });
 
+      ensureDraggingCapture(event, result.state);
       applyMoveResult(event, result);
     },
-    [applyMoveResult],
+    [applyMoveResult, ensureDraggingCapture],
   );
 
   const onDocumentPointerEnd = useCallback(
@@ -136,12 +155,15 @@ export function useSheetPointerHandlers(
         return;
       }
 
+      if (draggingRef.current) {
+        event.preventDefault();
+      }
+
       dispatchRef.current({
         type: "pointerUp",
         pointerId: event.pointerId,
       });
       endCapture(event.pointerId);
-      event.preventDefault();
     },
     [endCapture],
   );
@@ -161,16 +183,15 @@ export function useSheetPointerHandlers(
           surface,
         });
 
-        if (result.state.phase !== "dragging") {
-          return;
-        }
-
-        event.preventDefault();
-        event.stopPropagation();
-
         capturedPointerIdRef.current = event.pointerId;
         captureTargetRef.current = event.currentTarget;
-        trySetPointerCapture(event.currentTarget, event.pointerId);
+        draggingRef.current = result.state.phase === "dragging";
+
+        if (draggingRef.current) {
+          event.preventDefault();
+          event.stopPropagation();
+          trySetPointerCapture(event.currentTarget, event.pointerId);
+        }
 
         removeDocumentListeners();
         const move = (pointerEvent: PointerEvent) => {

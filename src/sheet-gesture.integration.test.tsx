@@ -69,6 +69,31 @@ function TestHalfSheetWithScroll() {
   );
 }
 
+function TestHalfSheetWithBodyButton() {
+  const [snap, setSnap] = useState<SheetSnap>("half");
+  const [selected, setSelected] = useState(false);
+
+  return (
+    <>
+      <div data-testid="selected">{selected ? "yes" : "no"}</div>
+      <Sheet snap={snap} onSnapChange={setSnap}>
+        <SheetLayout
+          header={<div data-testid="sheet-header">Header title</div>}
+          body={
+            <button
+              type="button"
+              data-testid="body-action"
+              onClick={() => setSelected(true)}
+            >
+              Select
+            </button>
+          }
+        />
+      </Sheet>
+    </>
+  );
+}
+
 function stubScrollRootDimensions(
   scrollRoot: HTMLDivElement,
   clientHeight: number,
@@ -269,5 +294,42 @@ describe("Sheet gesture integration", () => {
     pointerUp(5, 520);
 
     expect(screen.getByTestId("snap").textContent).not.toBe("full");
+  });
+
+  it("does not steal first body tap at half snap before move slop", () => {
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: 800,
+      writable: true,
+    });
+
+    render(<TestHalfSheetWithBodyButton />);
+
+    const button = screen.getByTestId("body-action");
+    const body = document.querySelector("[data-sheet-scroll-root]");
+    if (!(body instanceof HTMLDivElement)) {
+      throw new Error("Expected sheet scroll root");
+    }
+
+    let defaultPreventedOnDown = false;
+    const recordDefaultPrevented = (event: Event) => {
+      defaultPreventedOnDown = event.defaultPrevented;
+    };
+    body.addEventListener("pointerdown", recordDefaultPrevented);
+
+    pointerDown(button, 7, 400);
+
+    expect(defaultPreventedOnDown).toBe(false);
+    expect(
+      document.querySelector(".sheet")?.getAttribute("data-sheet-phase"),
+    ).toBe("idle");
+
+    pointerUp(7, 400);
+
+    expect(
+      document.querySelector(".sheet")?.getAttribute("data-sheet-phase"),
+    ).toBe("idle");
+
+    body.removeEventListener("pointerdown", recordDefaultPrevented);
   });
 });

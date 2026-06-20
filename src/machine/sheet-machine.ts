@@ -296,9 +296,37 @@ function reducePointerDown(
   });
 
   return {
-    state: { ...state, phase: "dragging", gesture },
-    effects: intent === "sheet" ? [{ type: "notifyDragStart" }] : [],
+    state: { ...state, phase: "idle", gesture },
+    effects: [],
   };
+}
+
+function reduceArmedBodyMove(
+  state: SheetMachineState,
+  event: SheetMachinePointerMove,
+  gesture: SheetGesture,
+): SheetMachineResult {
+  const totalDeltaY = event.clientY - gesture.startClientY;
+  if (Math.abs(totalDeltaY) < SHEET_AXIS_THRESHOLD_PX) {
+    return { state, effects: [] };
+  }
+
+  const draggingState: SheetMachineState = {
+    ...state,
+    phase: "dragging",
+  };
+  const effects: SheetMachineEffect[] = [];
+
+  if (gesture.intent === "pendingAxis") {
+    return reducePendingAxisMove(draggingState, event, gesture, effects);
+  }
+
+  if (gesture.intent === "scroll") {
+    return reduceScrollMove(draggingState, event, gesture, effects);
+  }
+
+  effects.push({ type: "notifyDragStart" });
+  return reduceSheetMove(draggingState, event, gesture, effects);
 }
 
 function reducePointerMove(
@@ -308,6 +336,10 @@ function reducePointerMove(
   const gesture = state.gesture;
   if (!gesture || gesture.pointerId !== event.pointerId) {
     return { state, effects: [] };
+  }
+
+  if (state.phase === "idle" && gesture.surface === "body") {
+    return reduceArmedBodyMove(state, event, gesture);
   }
 
   const effects: SheetMachineEffect[] = [];
@@ -445,6 +477,13 @@ function reducePointerUp(
   const gesture = state.gesture;
   if (!gesture || gesture.pointerId !== event.pointerId) {
     return { state, effects: [] };
+  }
+
+  if (state.phase === "idle") {
+    return {
+      state: { ...state, gesture: null },
+      effects: [],
+    };
   }
 
   if (gesture.intent !== "sheet") {

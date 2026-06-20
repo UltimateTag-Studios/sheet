@@ -23,7 +23,7 @@ Generic bottom sheet for React web apps — unified gesture state machine, no th
 ```json
 {
   "dependencies": {
-    "@siegetag/sheet": "github:YOUR_ORG/siegetag#main:packages/sheet"
+    "@siegetag/sheet": "github:UltimateTag-Studios/sheet#v0.1.0"
   }
 }
 ```
@@ -150,3 +150,9 @@ pnpm --filter @siegetag/sheet test
 ```
 
 Unit tests cover the gesture reducer, snap math, scroll mode, and integration tests cover chrome drag, scroll handoffs, and snap settle behavior.
+
+## License
+
+**GNU Affero General Public License v3.0 or later** — see [LICENSE](./LICENSE).
+
+Using this package in a network-facing app (including SaaS) may require you to share corresponding source when users interact with the modified version over a network. Linking from a private app to a published copy of this package is a separate question — review with counsel for your deployment model.
