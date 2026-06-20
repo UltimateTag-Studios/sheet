@@ -338,6 +338,71 @@ describe("Sheet gesture integration", () => {
     vi.useRealTimers();
   });
 
+  it("activates a body button on the first tap at half snap", () => {
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: 800,
+      writable: true,
+    });
+
+    render(<TestHalfSheetWithBodyButton />);
+
+    const button = screen.getByTestId("body-action");
+    pointerDown(button, 7, 400);
+    pointerUp(7, 400);
+
+    act(() => {
+      fireEvent.click(button);
+    });
+
+    expect(screen.getByTestId("selected").textContent).toBe("yes");
+    expect(
+      document.querySelector(".sheet")?.getAttribute("data-sheet-phase"),
+    ).toBe("idle");
+  });
+
+  it("drags the sheet from a body button after move slop without activating it", () => {
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: 800,
+      writable: true,
+    });
+
+    render(<TestHalfSheetWithBodyButton />);
+
+    const button = screen.getByTestId("body-action");
+    const body = document.querySelector("[data-sheet-scroll-root]");
+    if (!(body instanceof HTMLDivElement)) {
+      throw new Error("Expected sheet scroll root");
+    }
+    const slide = document.querySelector<HTMLElement>(".sheet-slide");
+    if (!slide) {
+      throw new Error("Expected sheet slide");
+    }
+    const initialTransform = slide.style.transform;
+
+    pointerDown(body, 8, 400);
+    pointerMove(8, 600);
+
+    expect(
+      document.querySelector(".sheet")?.getAttribute("data-sheet-phase"),
+    ).toBe("dragging");
+    expect(slide.style.transform).not.toBe(initialTransform);
+
+    pointerUp(8, 600);
+
+    expect(screen.getByTestId("selected").textContent).toBe("no");
+
+    pointerDown(button, 9, 400);
+    expect(
+      document.querySelector(".sheet")?.getAttribute("data-sheet-phase"),
+    ).toBe("idle");
+    pointerMove(9, 600);
+    expect(
+      document.querySelector(".sheet")?.getAttribute("data-sheet-phase"),
+    ).toBe("dragging");
+  });
+
   it("does not steal first body tap at half snap before move slop", () => {
     Object.defineProperty(window, "innerHeight", {
       configurable: true,

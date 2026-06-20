@@ -63,6 +63,7 @@ export function useSheetPointerHandlers(
   const capturedPointerIdRef = useRef<number | null>(null);
   const captureTargetRef = useRef<HTMLElement | null>(null);
   const draggingRef = useRef(false);
+  const gestureCommittedRef = useRef(false);
   const documentListenersRef = useRef<{
     move: (event: PointerEvent) => void;
     up: (event: PointerEvent) => void;
@@ -98,6 +99,7 @@ export function useSheetPointerHandlers(
       captureTargetRef.current = null;
       capturedPointerIdRef.current = null;
       draggingRef.current = false;
+      gestureCommittedRef.current = false;
       removeDocumentListeners();
     },
     [removeDocumentListeners],
@@ -112,6 +114,7 @@ export function useSheetPointerHandlers(
         result.bodyScrollDeltaPx !== 0
       ) {
         applyBodyScrollDeltaRef.current(result.bodyScrollDeltaPx);
+        gestureCommittedRef.current = true;
       }
 
       if (intent === "scroll") {
@@ -124,6 +127,7 @@ export function useSheetPointerHandlers(
         result.state.phase === "dragging" &&
         (intent === "sheet" || intent === "scroll")
       ) {
+        gestureCommittedRef.current = true;
         event.preventDefault();
       }
     },
@@ -170,7 +174,7 @@ export function useSheetPointerHandlers(
         return;
       }
 
-      if (draggingRef.current) {
+      if (draggingRef.current || gestureCommittedRef.current) {
         event.preventDefault();
       }
 
@@ -193,6 +197,7 @@ export function useSheetPointerHandlers(
 
         scrollMomentumRef.current.cancelScrollMomentum();
         scrollMomentumRef.current.clearScrollPointerTracking();
+        gestureCommittedRef.current = false;
 
         const result = dispatchRef.current({
           type: "pointerDown",
@@ -205,8 +210,8 @@ export function useSheetPointerHandlers(
         capturedPointerIdRef.current = event.pointerId;
         captureTargetRef.current = event.currentTarget;
         draggingRef.current = result.state.phase === "dragging";
-
         if (draggingRef.current) {
+          gestureCommittedRef.current = true;
           event.preventDefault();
           event.stopPropagation();
           trySetPointerCapture(event.currentTarget, event.pointerId);

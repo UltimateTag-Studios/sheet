@@ -37,8 +37,7 @@
   backdrop-filter: blur(24px);
 }
 
-.sheet[data-sheet-phase="dragging"] .sheet-slide,
-.sheet[data-sheet-phase="settling"] .sheet-slide {
+.sheet[data-sheet-phase="dragging"] .sheet-slide {
   touch-action: none;
   will-change: transform;
 }
@@ -71,6 +70,12 @@
 .sheet-header-interactive,
 .sheet-header-interactive * {
   pointer-events: auto;
+}
+
+/** Opt in on body content (or descendants) that must receive clicks/taps. */
+.sheet-body-interactive,
+.sheet-body-interactive * {
+  touch-action: manipulation;
 }
 
 .sheet-header {
@@ -124,4 +129,37 @@
 .sheet-body-root--drag {
   overflow-y: hidden;
   touch-action: none;
+}
+
+.sheet-body-root--scroll
+  :is(
+    button,
+    a[href],
+    input,
+    textarea,
+    select,
+    label,
+    summary,
+    [role="button"],
+    [role="link"],
+    [role="tab"],
+    [role="menuitem"],
+    [data-sheet-interactive]
+  ),
+.sheet-body-root--drag
+  :is(
+    button,
+    a[href],
+    input,
+    textarea,
+    select,
+    label,
+    summary,
+    [role="button"],
+    [role="link"],
+    [role="tab"],
+    [role="menuitem"],
+    [data-sheet-interactive]
+  ) {
+  touch-action: manipulation;
 }

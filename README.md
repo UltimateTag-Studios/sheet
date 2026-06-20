@@ -72,6 +72,8 @@ One pointer gesture can move through multiple modes without releasing:
 
 Body scroll is driven programmatically while the pointer is captured. On release, a fast fling continues with decaying momentum (same direction as the drag). A new pointer down or snap change cancels momentum. When the sheet settles to a new snap, body scroll resets to the top.
 
+Body pointer routing uses **capture** on the scroll root so drags can start on buttons and cards. Below move slop (8px), taps activate controls normally; once slop is exceeded, the gesture commits and the control click is suppressed.
+
 Do **not** add `overflow-y-auto` to body content — the shell owns scroll on the body root (`data-sheet-scroll-root`).
 
 ## Architecture
@@ -131,6 +133,7 @@ Override semantic classes from `@siegetag/sheet/styles.css`:
 | `.sheet-handle` | Drag pill |
 | `.sheet-header` | Optional header content area |
 | `.sheet-header-interactive` | Opt-in: header controls receive pointer events (chrome drag surface disables them by default) |
+| `.sheet-body-interactive` | Opt-in: non-native click targets get `touch-action: manipulation` inside the body scroll root |
 | `.sheet-divider` | Line between chrome and body (hidden at collapsed header via `data-sheet-collapsed-header`) |
 | `.sheet-bottom-reserve` | Fixed-height spacer for bottom chrome clearance (always in DOM when configured) |
 | `.sheet-body-root--scroll` | Body at full height (overflow scroll) |

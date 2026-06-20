@@ -78,7 +78,7 @@ export function SheetLayout({
         ref={registerBodyEl}
         className={sheetBodyRootClass(canBodyScroll)}
         data-sheet-scroll-root
-        onPointerDown={pointerHandlers.onBodyPointerDown}
+        onPointerDownCapture={pointerHandlers.onBodyPointerDown}
       >
         <div style={bodyInnerStyle}>{body}</div>
       </div>
