@@ -12,6 +12,8 @@ export type SheetLayoutProps = {
   body: ReactNode;
   headerStyle?: CSSProperties;
   bodyInnerStyle?: CSSProperties;
+  /** Always-on bottom reserve spacer height (e.g. tab bar clearance). */
+  bottomReserve?: string;
 };
 
 /** Sheet chrome (handle + optional header) and scroll/drag body below the divider. */
@@ -20,10 +22,12 @@ export function SheetLayout({
   body,
   headerStyle,
   bodyInnerStyle,
+  bottomReserve,
 }: SheetLayoutProps) {
   const {
     registerBodyEl,
     registerChromeMeasure,
+    registerReserveSpacer,
     pointerHandlers,
     sheetHandleStyle,
   } = useSheetContext();
@@ -42,6 +46,13 @@ export function SheetLayout({
       registerBodyEl(node);
     },
     [registerBodyEl],
+  );
+
+  const reserveSpacerRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      registerReserveSpacer(node);
+    },
+    [registerReserveSpacer],
   );
 
   return (
@@ -68,6 +79,14 @@ export function SheetLayout({
       >
         <div style={bodyInnerStyle}>{body}</div>
       </div>
+      {bottomReserve ? (
+        <div
+          ref={reserveSpacerRef}
+          className="sheet-bottom-reserve"
+          aria-hidden
+          style={{ height: bottomReserve }}
+        />
+      ) : null}
     </div>
   );
 }

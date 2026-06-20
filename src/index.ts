@@ -1,5 +1,5 @@
 export { useCanBodyScroll, useSheetContext } from "./context/sheet-context";
-export { showCollapsedBottomChromePadding } from "./layout/collapsed-bottom-chrome-padding";
+export { isSheetAtCollapsedHeader } from "./layout/collapsed-header-state";
 export { normalizeHalfSnapFraction } from "./layout/normalize-half-snap-fraction";
 export type {
   SheetGeometry,

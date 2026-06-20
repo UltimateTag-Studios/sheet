@@ -15,6 +15,7 @@ export type SheetContextValue = {
   sheetHandleStyle?: React.CSSProperties;
   registerBodyEl: (node: HTMLDivElement | null) => void;
   registerChromeMeasure: (node: HTMLElement | null) => void;
+  registerReserveSpacer: (node: HTMLElement | null) => void;
 };
 
 const SheetContext = createContext<SheetContextValue | null>(null);

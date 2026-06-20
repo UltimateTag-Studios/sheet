@@ -84,8 +84,12 @@
   border-bottom: 1px solid rgba(0, 0, 0, 0.08);
 }
 
-.sheet[data-sheet-collapsed-peek] .sheet-divider {
+.sheet[data-sheet-collapsed-header] .sheet-divider {
   border-bottom: none;
+}
+
+.sheet-bottom-reserve {
+  flex-shrink: 0;
 }
 
 /** Mirrors handle block below header content for vertical balance with the handle bar. */

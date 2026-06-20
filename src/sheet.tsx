@@ -5,7 +5,7 @@ import { SheetContextProvider } from "./context/sheet-context";
 import { useSheetMachine } from "./gesture/use-sheet-machine";
 import { useSheetPointerHandlers } from "./gesture/use-sheet-pointer-handlers";
 import { useSheetBodyScroll } from "./hooks/use-sheet-body-scroll";
-import { isSheetCollapsedPeek } from "./layout/collapsed-bottom-chrome-padding";
+import { isSheetAtCollapsedHeader } from "./layout/collapsed-header-state";
 import {
   DEFAULT_HALF_SNAP_FRACTION,
   normalizeHalfSnapFraction,
@@ -54,10 +54,14 @@ export function Sheet({
 }: SheetProps) {
   const resolvedHalfSnap = normalizeHalfSnapFraction(halfSnapFraction);
   const [chromeEl, setChromeEl] = useState<HTMLElement | null>(null);
+  const [reserveSpacerEl, setReserveSpacerEl] = useState<HTMLElement | null>(
+    null,
+  );
 
   const { collapsedHeightPx, halfHeightPx, fullHeightPx } = useSheetSnapHeights(
     {
       chromeEl,
+      reserveSpacerEl,
       collapsedBottomInsetPx,
       halfSnapFraction: resolvedHalfSnap,
     },
@@ -88,6 +92,10 @@ export function Sheet({
 
   const registerChromeMeasure = useCallback((node: HTMLElement | null) => {
     setChromeEl(node);
+  }, []);
+
+  const registerReserveSpacer = useCallback((node: HTMLElement | null) => {
+    setReserveSpacerEl(node);
   }, []);
 
   const transformStyle = useMemo(
@@ -121,6 +129,7 @@ export function Sheet({
       sheetHandleStyle,
       registerBodyEl,
       registerChromeMeasure,
+      registerReserveSpacer,
     }),
     [
       collapsedHeightPx,
@@ -128,6 +137,7 @@ export function Sheet({
       pointerHandlers,
       registerBodyEl,
       registerChromeMeasure,
+      registerReserveSpacer,
       sheetHandleStyle,
       state.phase,
       state.restingSnap,
@@ -135,7 +145,7 @@ export function Sheet({
     ],
   );
 
-  const collapsedPeek = isSheetCollapsedPeek({
+  const atCollapsedHeader = isSheetAtCollapsedHeader({
     sheetSnap: state.restingSnap,
     isDragging: state.phase === "dragging",
     visibleHeightPx: state.visibleHeightPx,
@@ -147,7 +157,7 @@ export function Sheet({
       className="sheet"
       style={{ bottom: "0px" }}
       data-sheet-phase={state.phase}
-      data-sheet-collapsed-peek={collapsedPeek ? "" : undefined}
+      data-sheet-collapsed-header={atCollapsedHeader ? "" : undefined}
     >
       <div
         className="sheet-slide"

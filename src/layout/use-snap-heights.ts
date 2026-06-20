@@ -5,6 +5,7 @@ import { measureCollapsedHeightPx, readFullHeightPx } from "./snap-heights";
 
 export type UseSheetSnapHeightsOptions = {
   chromeEl: HTMLElement | null;
+  reserveSpacerEl: HTMLElement | null;
   collapsedBottomInsetPx?: number;
   halfSnapFraction?: number;
 };
@@ -25,6 +26,7 @@ function heightsEqual(a: SheetSnapHeights, b: SheetSnapHeights): boolean {
 
 export function useSheetSnapHeights({
   chromeEl,
+  reserveSpacerEl,
   collapsedBottomInsetPx = 0,
   halfSnapFraction,
 }: UseSheetSnapHeightsOptions): SheetSnapHeights {
@@ -38,6 +40,7 @@ export function useSheetSnapHeights({
         collapsedBottomInsetPx,
         fullHeightPx,
         resolvedHalfSnap,
+        reserveSpacerEl,
       ),
       halfHeightPx: Math.round(fullHeightPx * resolvedHalfSnap),
       fullHeightPx,
@@ -53,6 +56,7 @@ export function useSheetSnapHeights({
           collapsedBottomInsetPx,
           fullHeightPx,
           resolvedHalfSnap,
+          reserveSpacerEl,
         ),
         halfHeightPx: Math.round(fullHeightPx * resolvedHalfSnap),
         fullHeightPx,
@@ -68,6 +72,9 @@ export function useSheetSnapHeights({
       if (chromeEl) {
         observer.observe(chromeEl);
       }
+      if (reserveSpacerEl) {
+        observer.observe(reserveSpacerEl);
+      }
       observers.push(observer);
     }
 
@@ -81,7 +88,7 @@ export function useSheetSnapHeights({
       window.removeEventListener("resize", syncHeights);
       window.visualViewport?.removeEventListener("resize", syncHeights);
     };
-  }, [chromeEl, collapsedBottomInsetPx, resolvedHalfSnap]);
+  }, [chromeEl, reserveSpacerEl, collapsedBottomInsetPx, resolvedHalfSnap]);
 
   return heights;
 }

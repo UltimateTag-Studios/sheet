@@ -59,14 +59,25 @@ export function measureChromeHeightPx(chromeEl: HTMLElement | null): number {
   return chromeEl?.offsetHeight ?? 0;
 }
 
-/** Chrome DOM height plus optional extra bottom inset. */
+/** Fixed reserve spacer height (e.g. tab-bar clearance). */
+export function measureReserveSpacerHeightPx(
+  reserveSpacerEl: HTMLElement | null,
+): number {
+  return reserveSpacerEl?.offsetHeight ?? 0;
+}
+
+/** Chrome DOM height plus optional inset and bottom reserve spacer. */
 export function measureCollapsedHeightPx(
   chromeEl: HTMLElement | null,
   collapsedBottomInsetPx: number,
   fullHeightPx: number = readFullHeightPx(),
   halfSnapFraction: number = DEFAULT_HALF_SNAP_FRACTION,
+  reserveSpacerEl: HTMLElement | null = null,
 ): number {
-  const total = measureChromeHeightPx(chromeEl) + collapsedBottomInsetPx;
+  const total =
+    measureChromeHeightPx(chromeEl) +
+    collapsedBottomInsetPx +
+    measureReserveSpacerHeightPx(reserveSpacerEl);
 
   if (total <= 0) {
     return FALLBACK_COLLAPSED_HEIGHT_PX;

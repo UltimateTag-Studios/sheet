@@ -268,6 +268,36 @@ describe("reduceSheetMachine", () => {
     expect(result.bodyScrollDeltaPx).toBe(10);
   });
 
+  it("does not drag below collapsed height when reserve is in the floor", () => {
+    const reserveHeights = {
+      collapsedHeightPx: 210,
+      halfHeightPx: 350,
+      fullHeightPx: 700,
+    };
+
+    let state = createInitialSheetMachineState({
+      restingSnap: "half",
+      ...reserveHeights,
+    });
+
+    state = reduceSheetMachine(state, {
+      type: "pointerDown",
+      pointerId: 1,
+      clientY: 400,
+      scrollTopPx: 0,
+      surface: "body",
+    }).state;
+
+    state = reduceSheetMachine(state, {
+      type: "pointerMove",
+      pointerId: 1,
+      clientY: 600,
+      scrollTopPx: 0,
+    }).state;
+
+    expect(state.visibleHeightPx).toBe(210);
+  });
+
   it("updates height while dragging at half snap", () => {
     let state = createInitialSheetMachineState({
       restingSnap: "half",
