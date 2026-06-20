@@ -8,10 +8,22 @@ Generic bottom sheet for React web apps — unified gesture state machine, no th
 
 ## Install
 
+**Monorepo (this repo):**
+
 ```json
 {
   "dependencies": {
     "@siegetag/sheet": "workspace:*"
+  }
+}
+```
+
+**External app:** pin a version or git URL — do **not** use `workspace:*` outside a pnpm workspace.
+
+```json
+{
+  "dependencies": {
+    "@siegetag/sheet": "github:YOUR_ORG/siegetag#main:packages/sheet"
   }
 }
 ```
