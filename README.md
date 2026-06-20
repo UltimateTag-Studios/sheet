@@ -48,9 +48,11 @@ Omit `header` for handle-only layouts — collapsed snap is handle height only.
 
 | Zone | Behavior |
 |------|----------|
-| Handle + header | Sheet drag at all snaps |
+| Handle + header (chrome) | Sheet drag at all snaps — even when body is scrolled at full |
 | Body below divider | Sheet drag below full height |
 | Body at full height | Scroll when content scrolled; at scroll top, drag down collapses, drag up scrolls |
+
+When the sheet settles to a new snap, body scroll resets to the top.
 
 Do **not** add `overflow-y-auto` to body content — the shell owns scroll on the body root.
 

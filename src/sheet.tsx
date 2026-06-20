@@ -89,6 +89,24 @@ export function Sheet({
 
   const pointerHandlers = useSheetPointerHandlers(dispatch, readScrollTop);
 
+  const prevRestingSnapRef = useRef(state.restingSnap);
+
+  useEffect(() => {
+    if (prevRestingSnapRef.current === state.restingSnap) {
+      return;
+    }
+
+    prevRestingSnapRef.current = state.restingSnap;
+
+    const bodyEl = bodyElRef.current;
+    if (!bodyEl) {
+      return;
+    }
+
+    bodyEl.scrollTop = 0;
+    scrollTopRef.current = 0;
+  }, [state.restingSnap]);
+
   const registerChromeEl = useCallback((node: HTMLElement | null) => {
     setChromeEl(node);
   }, []);

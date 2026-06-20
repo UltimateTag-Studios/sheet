@@ -8,10 +8,12 @@ import {
 import type {
   SheetMachineEvent,
   SheetMachineResult,
+  SheetPointerSurface,
 } from "../machine/sheet-machine";
 
 export type SheetPointerHandlers = {
-  onPointerDown: (event: ReactPointerEvent<HTMLElement>) => void;
+  onChromePointerDown: (event: ReactPointerEvent<HTMLElement>) => void;
+  onBodyPointerDown: (event: ReactPointerEvent<HTMLElement>) => void;
 };
 
 function trySetPointerCapture(target: HTMLElement, pointerId: number): void {
@@ -132,49 +134,54 @@ export function useSheetPointerHandlers(
   );
 
   const onPointerDown = useCallback(
-    (event: ReactPointerEvent<HTMLElement>) => {
-      if (event.button !== 0) {
-        return;
-      }
+    (surface: SheetPointerSurface) =>
+      (event: ReactPointerEvent<HTMLElement>) => {
+        if (event.button !== 0) {
+          return;
+        }
 
-      const result = dispatchRef.current({
-        type: "pointerDown",
-        pointerId: event.pointerId,
-        clientY: event.clientY,
-        scrollTopPx: readScrollTopRef.current(),
-      });
+        const result = dispatchRef.current({
+          type: "pointerDown",
+          pointerId: event.pointerId,
+          clientY: event.clientY,
+          scrollTopPx: readScrollTopRef.current(),
+          surface,
+        });
 
-      if (result.releaseToScroll) {
-        return;
-      }
+        if (result.releaseToScroll) {
+          return;
+        }
 
-      if (result.state.phase !== "dragging") {
-        return;
-      }
+        if (result.state.phase !== "dragging") {
+          return;
+        }
 
-      event.preventDefault();
-      event.stopPropagation();
+        event.preventDefault();
+        event.stopPropagation();
 
-      capturedPointerIdRef.current = event.pointerId;
-      captureTargetRef.current = event.currentTarget;
-      trySetPointerCapture(event.currentTarget, event.pointerId);
+        capturedPointerIdRef.current = event.pointerId;
+        captureTargetRef.current = event.currentTarget;
+        trySetPointerCapture(event.currentTarget, event.pointerId);
 
-      removeDocumentListeners();
-      const move = (pointerEvent: PointerEvent) => {
-        onDocumentPointerMove(pointerEvent);
-      };
-      const up = (pointerEvent: PointerEvent) => {
-        onDocumentPointerEnd(pointerEvent);
-      };
-      documentListenersRef.current = { move, up };
-      document.addEventListener("pointermove", move);
-      document.addEventListener("pointerup", up);
-      document.addEventListener("pointercancel", up);
-    },
+        removeDocumentListeners();
+        const move = (pointerEvent: PointerEvent) => {
+          onDocumentPointerMove(pointerEvent);
+        };
+        const up = (pointerEvent: PointerEvent) => {
+          onDocumentPointerEnd(pointerEvent);
+        };
+        documentListenersRef.current = { move, up };
+        document.addEventListener("pointermove", move);
+        document.addEventListener("pointerup", up);
+        document.addEventListener("pointercancel", up);
+      },
     [onDocumentPointerEnd, onDocumentPointerMove, removeDocumentListeners],
   );
 
   useEffect(() => () => removeDocumentListeners(), [removeDocumentListeners]);
 
-  return { onPointerDown };
+  return {
+    onChromePointerDown: onPointerDown("chrome"),
+    onBodyPointerDown: onPointerDown("body"),
+  };
 }

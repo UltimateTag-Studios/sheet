@@ -48,7 +48,7 @@ export function SheetLayout({
         measureRef={chromeMeasureRef}
         handleStyle={drawerHandleStyle}
         style={headerStyle}
-        onPointerDown={pointerHandlers.onPointerDown}
+        onPointerDown={pointerHandlers.onChromePointerDown}
       >
         {hasHeader ? (
           <>
@@ -62,7 +62,7 @@ export function SheetLayout({
         ref={bodyRootRef}
         className={sheetBodyRootClass(canBodyScroll)}
         data-sheet-scroll-root
-        onPointerDown={pointerHandlers.onPointerDown}
+        onPointerDown={pointerHandlers.onBodyPointerDown}
       >
         <div style={bodyInnerStyle}>{body}</div>
       </div>

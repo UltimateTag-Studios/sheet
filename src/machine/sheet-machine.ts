@@ -10,11 +10,14 @@ export type SheetPhase = "idle" | "dragging" | "settling";
 
 export type SheetGestureIntent = "pendingAxis" | "sheet" | "scroll";
 
+export type SheetPointerSurface = "chrome" | "body";
+
 export type SheetGesture = {
   pointerId: number;
   startClientY: number;
   startHeightPx: number;
   intent: SheetGestureIntent;
+  surface: SheetPointerSurface;
 };
 
 export type SheetMachineState = {
@@ -34,6 +37,7 @@ export type SheetMachinePointerDown = {
   pointerId: number;
   clientY: number;
   scrollTopPx: number;
+  surface: SheetPointerSurface;
 };
 
 export type SheetMachinePointerMove = {
@@ -206,6 +210,21 @@ function reducePointerDown(
     return { state, effects: [] };
   }
 
+  if (event.surface === "chrome") {
+    const gesture: SheetGesture = {
+      pointerId: event.pointerId,
+      startClientY: event.clientY,
+      startHeightPx: state.visibleHeightPx,
+      intent: "sheet",
+      surface: "chrome",
+    };
+
+    return {
+      state: { ...state, phase: "dragging", gesture },
+      effects: [{ type: "notifyDragStart" }],
+    };
+  }
+
   const canScroll = scrollEnabled(state);
   if (canScroll && event.scrollTopPx > 1) {
     return { state, effects: [], releaseToScroll: true };
@@ -216,6 +235,7 @@ function reducePointerDown(
     startClientY: event.clientY,
     startHeightPx: state.visibleHeightPx,
     intent: canScroll ? "pendingAxis" : "sheet",
+    surface: "body",
   };
 
   return {
@@ -260,6 +280,7 @@ function reducePointerMove(
   }
 
   if (
+    gesture.surface === "body" &&
     scrollEnabled(state) &&
     event.scrollTopPx > 1 &&
     gesture.startHeightPx >= state.fullHeightPx - FULL_HEIGHT_EPSILON_PX

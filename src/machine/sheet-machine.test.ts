@@ -32,6 +32,7 @@ describe("reduceSheetMachine", () => {
       pointerId: 1,
       clientY: 400,
       scrollTopPx: 0,
+      surface: "body",
     });
 
     expect(result.state.phase).toBe("dragging");
@@ -50,10 +51,58 @@ describe("reduceSheetMachine", () => {
       pointerId: 1,
       clientY: 400,
       scrollTopPx: 48,
+      surface: "body",
     });
 
     expect(result.releaseToScroll).toBe(true);
     expect(result.state.phase).toBe("idle");
+  });
+
+  it("captures chrome drag when body is scrolled at full height", () => {
+    const initial = createInitialSheetMachineState({
+      restingSnap: "full",
+      ...baseHeights,
+    });
+
+    const result = reduceSheetMachine(initial, {
+      type: "pointerDown",
+      pointerId: 1,
+      clientY: 400,
+      scrollTopPx: 48,
+      surface: "chrome",
+    });
+
+    expect(result.releaseToScroll).toBeUndefined();
+    expect(result.state.phase).toBe("dragging");
+    expect(result.state.gesture?.intent).toBe("sheet");
+    expect(result.state.gesture?.surface).toBe("chrome");
+    expect(result.effects).toContainEqual({ type: "notifyDragStart" });
+  });
+
+  it("keeps chrome drag when body remains scrolled during move", () => {
+    let state = createInitialSheetMachineState({
+      restingSnap: "full",
+      ...baseHeights,
+    });
+
+    state = reduceSheetMachine(state, {
+      type: "pointerDown",
+      pointerId: 1,
+      clientY: 400,
+      scrollTopPx: 48,
+      surface: "chrome",
+    }).state;
+
+    const result = reduceSheetMachine(state, {
+      type: "pointerMove",
+      pointerId: 1,
+      clientY: 460,
+      scrollTopPx: 48,
+    });
+
+    expect(result.releaseToScroll).toBeUndefined();
+    expect(result.state.gesture?.intent).toBe("sheet");
+    expect(result.state.visibleHeightPx).toBeLessThan(700);
   });
 
   it("enters pendingAxis at full height with scroll top", () => {
@@ -67,6 +116,7 @@ describe("reduceSheetMachine", () => {
       pointerId: 1,
       clientY: 400,
       scrollTopPx: 0,
+      surface: "body",
     });
 
     expect(result.state.gesture?.intent).toBe("pendingAxis");
@@ -84,6 +134,7 @@ describe("reduceSheetMachine", () => {
       pointerId: 1,
       clientY: 400,
       scrollTopPx: 0,
+      surface: "body",
     }).state;
 
     const result = reduceSheetMachine(state, {
@@ -108,6 +159,7 @@ describe("reduceSheetMachine", () => {
       pointerId: 1,
       clientY: 400,
       scrollTopPx: 0,
+      surface: "body",
     }).state;
 
     const result = reduceSheetMachine(state, {
@@ -133,6 +185,7 @@ describe("reduceSheetMachine", () => {
       pointerId: 1,
       clientY: 400,
       scrollTopPx: 0,
+      surface: "body",
     }).state;
 
     const result = reduceSheetMachine(state, {
@@ -156,6 +209,7 @@ describe("reduceSheetMachine", () => {
       pointerId: 1,
       clientY: 300,
       scrollTopPx: 0,
+      surface: "body",
     }).state;
 
     state = reduceSheetMachine(state, {
