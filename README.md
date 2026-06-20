@@ -112,6 +112,8 @@ Chrome surface always uses `sheet` intent.
 | `collapsedBottomInsetPx` | `0` | Extra collapsed height without DOM |
 | `sheetStyle` / `sheetHandleStyle` | — | CSS overrides (prefer theme CSS on `.sheet`) |
 
+The sheet root is `position: fixed` with **no default `z-index`**. Stack order comes from **DOM order**: render the sheet before app chrome that must sit on top (floating tab bars, modals, etc.). `@siegetag/sheet-map` renders map → overlay → sheet inside the shell; your tab bar should be a **later sibling** of the map route (see SiegeTag `MainTabsLayout`).
+
 ## Theming
 
 Override semantic classes from `@siegetag/sheet/styles.css`:
