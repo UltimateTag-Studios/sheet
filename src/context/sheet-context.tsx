@@ -4,7 +4,6 @@ import { createContext, useContext } from "react";
 import type { SheetPointerHandlers } from "../gesture/use-sheet-pointer-handlers";
 import { canBodyScroll } from "../layout/scroll-mode";
 import type { SheetSnap } from "../layout/snap-math";
-import type { SheetMachineEvent } from "../machine/sheet-machine";
 
 export type SheetContextValue = {
   sheetSnap: SheetSnap;
@@ -12,11 +11,10 @@ export type SheetContextValue = {
   collapsedHeightPx: number;
   fullHeightPx: number;
   isDragging: boolean;
-  dispatch: (event: SheetMachineEvent) => void;
   pointerHandlers: SheetPointerHandlers;
-  drawerHandleStyle?: React.CSSProperties;
-  registerChromeEl: (node: HTMLElement | null) => void;
+  sheetHandleStyle?: React.CSSProperties;
   registerBodyEl: (node: HTMLDivElement | null) => void;
+  registerChromeMeasure: (node: HTMLElement | null) => void;
 };
 
 const SheetContext = createContext<SheetContextValue | null>(null);

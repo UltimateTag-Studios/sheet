@@ -1,18 +1,18 @@
-export { useSheetContext } from "./context/sheet-context";
+export { useCanBodyScroll, useSheetContext } from "./context/sheet-context";
 export { showCollapsedBottomChromePadding } from "./layout/collapsed-bottom-chrome-padding";
+export { normalizeHalfSnapFraction } from "./layout/normalize-half-snap-fraction";
 export type {
-  SheetDrawerStyle,
   SheetGeometry,
+  SheetStyles,
   SheetVisualStyles,
-} from "./layout/drawer-layout-vars";
+} from "./layout/sheet-layout-vars";
 export {
   buildSheetLayoutVars,
   buildSheetStyle,
   DEFAULT_SHEET_HANDLE_BAR_HEIGHT,
   DEFAULT_SHEET_HANDLE_MARGIN_BOTTOM,
   DEFAULT_SHEET_HANDLE_MARGIN_TOP,
-} from "./layout/drawer-layout-vars";
-export { normalizeHalfSnapFraction } from "./layout/normalize-half-snap-fraction";
+} from "./layout/sheet-layout-vars";
 export {
   FALLBACK_COLLAPSED_HEIGHT_PX,
   FALLBACK_FULL_HEIGHT_PX,

@@ -5,14 +5,14 @@ export const DEFAULT_SHEET_HANDLE_BAR_HEIGHT = "0.25rem";
 export const DEFAULT_SHEET_HANDLE_MARGIN_BOTTOM = "0.75rem";
 
 export type SheetGeometry = {
-  drawerHandleMarginTop?: number | string;
-  drawerHandleBarHeight?: number | string;
-  drawerHandleMarginBottom?: number | string;
+  sheetHandleMarginTop?: number | string;
+  sheetHandleBarHeight?: number | string;
+  sheetHandleMarginBottom?: number | string;
 };
 
 export type SheetVisualStyles = {
-  drawer?: CSSProperties;
-  drawerHandle?: CSSProperties;
+  sheet?: CSSProperties;
+  sheetHandle?: CSSProperties;
 };
 
 function toCssLength(
@@ -26,41 +26,41 @@ function toCssLength(
   return typeof value === "number" ? `${value}px` : value;
 }
 
-/** Layout tokens as CSS custom properties on `.sheet-drawer`. */
+/** Layout tokens as CSS custom properties on `.sheet`. */
 export function buildSheetLayoutVars(
   layout: SheetGeometry = {},
 ): CSSProperties {
   return {
     "--sheet-handle-margin-top": toCssLength(
-      layout.drawerHandleMarginTop,
+      layout.sheetHandleMarginTop,
       DEFAULT_SHEET_HANDLE_MARGIN_TOP,
     ),
     "--sheet-handle-bar-height": toCssLength(
-      layout.drawerHandleBarHeight,
+      layout.sheetHandleBarHeight,
       DEFAULT_SHEET_HANDLE_BAR_HEIGHT,
     ),
     "--sheet-handle-margin-bottom": toCssLength(
-      layout.drawerHandleMarginBottom,
+      layout.sheetHandleMarginBottom,
       DEFAULT_SHEET_HANDLE_MARGIN_BOTTOM,
     ),
   } as CSSProperties;
 }
 
-export type SheetDrawerStyle = {
-  drawer: CSSProperties;
-  drawerHandle: CSSProperties;
+export type SheetStyles = {
+  sheet: CSSProperties;
+  sheetHandle: CSSProperties;
 };
 
 /** Merge layout tokens with optional visual style overrides. */
 export function buildSheetStyle(
   layout: SheetGeometry = {},
   styles: SheetVisualStyles = {},
-): SheetDrawerStyle {
+): SheetStyles {
   return {
-    drawer: {
+    sheet: {
       ...buildSheetLayoutVars(layout),
-      ...styles.drawer,
+      ...styles.sheet,
     },
-    drawerHandle: styles.drawerHandle ?? {},
+    sheetHandle: styles.sheetHandle ?? {},
   };
 }

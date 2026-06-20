@@ -151,7 +151,7 @@ describe("Sheet gesture integration", () => {
     dragSurface(chrome, 1, 400, 100);
 
     expect(screen.getByTestId("snap").textContent).toBe("full");
-    expect(document.querySelector(".sheet-drawer")?.style.transform).toBe(
+    expect(document.querySelector<HTMLElement>(".sheet")?.style.transform).toBe(
       "translate3d(0, 0px, 0)",
     );
   });
@@ -236,13 +236,13 @@ describe("Sheet gesture integration", () => {
 
     expect(body.scrollTop).toBe(0);
     expect(
-      document.querySelector(".sheet-drawer")?.getAttribute("data-sheet-phase"),
+      document.querySelector(".sheet")?.getAttribute("data-sheet-phase"),
     ).toBe("dragging");
+    const sheetEl = document.querySelector<HTMLElement>(".sheet");
     expect(
       Number.parseInt(
-        document
-          .querySelector(".sheet-drawer")
-          ?.style.transform.match(/translate3d\(0, (\d+)px, 0\)/)?.[1] ?? "0",
+        sheetEl?.style.transform.match(/translate3d\(0, (\d+)px, 0\)/)?.[1] ??
+          "0",
         10,
       ),
     ).toBeGreaterThan(0);

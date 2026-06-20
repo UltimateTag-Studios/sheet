@@ -1,14 +1,14 @@
 import type { CSSProperties, ReactNode } from "react";
 
-import type { SheetPointerHandlers } from "../gesture/use-sheet-pointer-handlers";
 import { SheetDivider } from "./divider";
 import { SheetHandle } from "./handle";
 
-export type SheetChromeProps = SheetPointerHandlers & {
+export type SheetChromeProps = {
   measureRef: (node: HTMLDivElement | null) => void;
   handleStyle?: CSSProperties;
   style?: CSSProperties;
   children?: ReactNode;
+  onChromePointerDown: (event: React.PointerEvent<HTMLElement>) => void;
 };
 
 /** Handle + optional header + divider — one drag surface and collapsed-height measure root. */
@@ -17,7 +17,7 @@ export function SheetChrome({
   handleStyle,
   style,
   children,
-  onPointerDown,
+  onChromePointerDown,
 }: SheetChromeProps) {
   return (
     <div
@@ -25,7 +25,7 @@ export function SheetChrome({
       className="sheet-chrome"
       style={style}
       data-sheet-chrome
-      onPointerDown={onPointerDown}
+      onPointerDown={onChromePointerDown}
     >
       <SheetHandle style={handleStyle} />
       {children}

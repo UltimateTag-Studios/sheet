@@ -10,8 +10,8 @@ export { readContainerHeightPx, visibleHeightToTranslateOffsetPx };
 export const SHEET_SETTLE_TRANSITION =
   "transform 0.5s cubic-bezier(0.32, 0.72, 0, 1)";
 
-/** Sheet root style from visible height and drag phase. */
-export function drawerStyleForVisibleHeightPx(
+/** Sheet root transform/transition from visible height and drag phase. */
+export function sheetTransformStyle(
   visibleHeightPx: number,
   phase: "idle" | "dragging" | "settling",
 ): CSSProperties {

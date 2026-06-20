@@ -3,7 +3,7 @@
  * Import once: import "@siegetag/sheet/styles.css"
  * Override theme tokens (radius, border, background) in your app.
  */
-.sheet-drawer {
+.sheet {
   --sheet-handle-margin-top: 0.75rem;
   --sheet-handle-bar-height: 0.25rem;
   --sheet-handle-margin-bottom: 0.75rem;
@@ -30,11 +30,11 @@
   backdrop-filter: blur(24px);
 }
 
-.sheet-drawer[data-sheet-phase="dragging"] {
+.sheet[data-sheet-phase="dragging"] {
   touch-action: none;
 }
 
-.sheet-drawer-inner {
+.sheet-inner {
   display: flex;
   min-height: 0;
   flex: 1;
@@ -62,7 +62,7 @@
   flex-shrink: 0;
 }
 
-.sheet-drawer-handle {
+.sheet-handle {
   margin-top: var(--sheet-handle-margin-top);
   margin-bottom: var(--sheet-handle-margin-bottom);
   margin-inline: auto;

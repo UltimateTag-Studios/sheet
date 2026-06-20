@@ -9,6 +9,12 @@ import {
   snapHeightFromPanDelta,
 } from "../layout/snap-math";
 
+/**
+ * Sheet gesture state machine.
+ *
+ * Body pointer intents: sheet (move height) | scroll (content delta) | pendingAxis (disambiguate at full + scroll top).
+ * Chrome pointers always use sheet intent. One continuous drag can transition between intents.
+ */
 export type SheetPhase = "idle" | "dragging" | "settling";
 
 export type SheetGestureIntent = "pendingAxis" | "sheet" | "scroll";
@@ -22,7 +28,6 @@ export type SheetGesture = {
   intent: SheetGestureIntent;
   surface: SheetPointerSurface;
   lastClientY: number;
-  startScrollTopPx: number;
 };
 
 export type SheetMachineState = {
@@ -119,7 +124,6 @@ function createGesture(args: {
     intent: args.intent,
     surface: args.surface,
     lastClientY: args.clientY,
-    startScrollTopPx: args.scrollTopPx,
   };
 }
 
@@ -140,13 +144,11 @@ function reanchorSheetGesture(
 function beginScrollGesture(
   gesture: SheetGesture,
   clientY: number,
-  scrollTopPx: number,
 ): SheetGesture {
   return {
     ...gesture,
     intent: "scroll",
     lastClientY: clientY,
-    startScrollTopPx: scrollTopPx,
   };
 }
 
@@ -338,7 +340,7 @@ function reducePendingAxisMove(
       state: {
         ...state,
         visibleHeightPx: state.fullHeightPx,
-        gesture: beginScrollGesture(gesture, event.clientY, event.scrollTopPx),
+        gesture: beginScrollGesture(gesture, event.clientY),
       },
       effects,
       bodyScrollDeltaPx: excessUp > 0 ? excessUp : undefined,
@@ -418,11 +420,7 @@ function reduceSheetMove(
         state: {
           ...state,
           visibleHeightPx: state.fullHeightPx,
-          gesture: beginScrollGesture(
-            gesture,
-            event.clientY,
-            event.scrollTopPx,
-          ),
+          gesture: beginScrollGesture(gesture, event.clientY),
         },
         effects,
         bodyScrollDeltaPx: scrollExcessPx,

@@ -16,16 +16,6 @@ export function canBodyScroll(args: {
   return args.sheetSnap === "full";
 }
 
-export function shouldCaptureSheetGesture(args: {
-  canBodyScroll: boolean;
-  scrollTopPx: number;
-}): boolean {
-  if (!args.canBodyScroll) {
-    return true;
-  }
-  return args.scrollTopPx <= SCROLL_TOP_EPSILON_PX;
-}
-
 export const SHEET_BODY_ROOT_BASE_CLASS = "sheet-body-root";
 
 export const SHEET_BODY_SCROLLABLE_CLASS = "sheet-body-root--scroll";

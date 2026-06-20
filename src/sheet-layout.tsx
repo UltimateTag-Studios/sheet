@@ -3,7 +3,6 @@ import { useCallback } from "react";
 
 import { SheetHandleSpacer } from "./components/handle-spacer";
 import { SheetChrome, SheetDivider } from "./components/sheet-chrome";
-import { useChromeMeasureRef } from "./context/chrome-measure-context";
 import { useCanBodyScroll, useSheetContext } from "./context/sheet-context";
 import { sheetBodyRootClass } from "./layout/scroll-mode";
 
@@ -22,17 +21,20 @@ export function SheetLayout({
   headerStyle,
   bodyInnerStyle,
 }: SheetLayoutProps) {
-  const onChromeMeasure = useChromeMeasureRef();
-  const { registerBodyEl, pointerHandlers, drawerHandleStyle } =
-    useSheetContext();
+  const {
+    registerBodyEl,
+    registerChromeMeasure,
+    pointerHandlers,
+    sheetHandleStyle,
+  } = useSheetContext();
   const canBodyScroll = useCanBodyScroll();
   const hasHeader = header != null;
 
   const chromeMeasureRef = useCallback(
     (node: HTMLDivElement | null) => {
-      onChromeMeasure(node);
+      registerChromeMeasure(node);
     },
-    [onChromeMeasure],
+    [registerChromeMeasure],
   );
 
   const bodyRootRef = useCallback(
@@ -46,9 +48,9 @@ export function SheetLayout({
     <div className="sheet-layers">
       <SheetChrome
         measureRef={chromeMeasureRef}
-        handleStyle={drawerHandleStyle}
+        handleStyle={sheetHandleStyle}
         style={headerStyle}
-        onPointerDown={pointerHandlers.onChromePointerDown}
+        onChromePointerDown={pointerHandlers.onChromePointerDown}
       >
         {hasHeader ? (
           <>
