@@ -9,14 +9,18 @@
       "types": "./src/index.ts",
       "default": "./src/index.ts"
     },
-    "./styles.css": "./styles/sheet.css"
+    "./styles.css": "./dist/style.css"
   },
   "files": [
+    "dist/style.css",
     "styles/sheet.css",
     "src",
     "package.json"
   ],
   "scripts": {
+    "build": "pnpm run build:styles",
+    "build:styles": "node ./scripts/build-styles.mjs",
+    "prepare": "pnpm run build:styles",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",

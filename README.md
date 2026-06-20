@@ -16,11 +16,13 @@ Generic bottom sheet for React web apps — unified gesture state machine, no th
 }
 ```
 
-Import styles once in your app entry (not bundled automatically):
+Import base layout styles once in your app entry (built to `dist/style.css`, exported as `@siegetag/sheet/styles.css`):
 
 ```tsx
 import "@siegetag/sheet/styles.css";
 ```
+
+Override semantic classes in your app CSS (see [Theming](#theming)).
 
 ## Quick start
 
@@ -100,7 +102,7 @@ Chrome surface always uses `sheet` intent.
 
 ## Theming
 
-Override semantic classes from `styles.css`:
+Override semantic classes from `@siegetag/sheet/styles.css`:
 
 | Class | Purpose |
 |-------|---------|
@@ -110,6 +112,16 @@ Override semantic classes from `styles.css`:
 | `.sheet-divider` | Line between chrome and body |
 | `.sheet-body-root--scroll` | Body at full height (overflow scroll) |
 | `.sheet-body-root--drag` | Body below full height (overflow hidden) |
+
+## Build
+
+Styles compile from `styles/sheet.css` to `dist/style.css` on `pnpm install` (`prepare`) or manually:
+
+```bash
+pnpm --filter @siegetag/sheet build:styles
+```
+
+`dist/` is gitignored — after a clean checkout run `pnpm install` (or `build:styles`) before starting apps that import `@siegetag/sheet/styles.css`.
 
 ## Demo app
 
