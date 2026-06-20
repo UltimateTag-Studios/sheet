@@ -4,6 +4,8 @@ export {
   useSheetControlsContext,
   useSheetMetricsContext,
 } from "./context/sheet-context";
+export type { TouchClickActivationHandlers } from "./gesture/use-touch-click-activation";
+export { useTouchClickActivation } from "./gesture/use-touch-click-activation";
 export { isSheetAtCollapsedHeader } from "./layout/collapsed-header-state";
 export { normalizeHalfSnapFraction } from "./layout/normalize-half-snap-fraction";
 export type {

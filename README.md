@@ -170,6 +170,25 @@ pnpm --filter @siegetag/sheet test
 
 Unit tests cover the gesture reducer, snap math, scroll mode, and integration tests cover chrome drag, scroll handoffs, and snap settle behavior.
 
+## Touch controls after sheet drag
+
+On Android, the browser often **does not fire `click`** for taps immediately after a sheet drag (or when `pointerdown` / `pointerup` hit different elements). Sheet body buttons use document-level pointer routing plus `activateSheetClickTarget`; standalone controls should use **`useTouchClickActivation`**.
+
+```tsx
+import { useTouchClickActivation } from "@siegetag/sheet";
+
+function MyControl({ onPress }: { onPress: () => void }) {
+  const touch = useTouchClickActivation(onPress);
+  return <button type="button" {...touch}>Action</button>;
+}
+```
+
+- **Touch:** `pointerup` runs `onPress` on the next frame.
+- **Mouse / pen:** normal `click`.
+- Spread handlers on the **interactive element**, not a wrapper with `pointer-events: auto`.
+
+Inside the sheet body scroll root, keep using **`sheet-body-interactive`** and the sheet gesture path instead of this hook alone.
+
 ## License
 
 **GNU Affero General Public License v3.0 or later** — see [LICENSE](./LICENSE).
