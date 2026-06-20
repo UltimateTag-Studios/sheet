@@ -130,6 +130,7 @@ Override semantic classes from `@siegetag/sheet/styles.css`:
 | `.sheet-bottom-reserve` | Fixed-height spacer for bottom chrome clearance (always in DOM when configured) |
 | `.sheet-body-root--scroll` | Body at full height (overflow scroll) |
 | `.sheet-body-root--drag` | Body below full height (overflow hidden) |
+| `.sheet[data-sheet-collapsed-header] .sheet-body-root` | Body hidden at collapsed header snap |
 
 ## Build
 

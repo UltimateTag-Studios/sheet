@@ -88,6 +88,10 @@
   border-bottom: none;
 }
 
+.sheet[data-sheet-collapsed-header] .sheet-body-root {
+  display: none;
+}
+
 .sheet-bottom-reserve {
   flex-shrink: 0;
 }
