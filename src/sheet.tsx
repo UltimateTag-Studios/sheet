@@ -87,7 +87,25 @@ export function Sheet({
     return scrollTopRef.current;
   }, []);
 
-  const pointerHandlers = useSheetPointerHandlers(dispatch, readScrollTop);
+  const applyBodyScrollDelta = useCallback((deltaPx: number) => {
+    const bodyEl = bodyElRef.current;
+    if (!bodyEl) {
+      return;
+    }
+
+    const maxScrollTop = bodyEl.scrollHeight - bodyEl.clientHeight;
+    bodyEl.scrollTop = Math.min(
+      maxScrollTop,
+      Math.max(0, bodyEl.scrollTop + deltaPx),
+    );
+    scrollTopRef.current = bodyEl.scrollTop;
+  }, []);
+
+  const pointerHandlers = useSheetPointerHandlers(
+    dispatch,
+    readScrollTop,
+    applyBodyScrollDelta,
+  );
 
   const prevRestingSnapRef = useRef(state.restingSnap);
 

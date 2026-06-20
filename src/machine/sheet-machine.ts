@@ -1,4 +1,7 @@
-import { FULL_HEIGHT_EPSILON_PX } from "../layout/scroll-mode";
+import {
+  FULL_HEIGHT_EPSILON_PX,
+  SCROLL_TOP_EPSILON_PX,
+} from "../layout/scroll-mode";
 import {
   heightForSnap,
   nearestSnapHeight,
@@ -18,6 +21,8 @@ export type SheetGesture = {
   startHeightPx: number;
   intent: SheetGestureIntent;
   surface: SheetPointerSurface;
+  lastClientY: number;
+  startScrollTopPx: number;
 };
 
 export type SheetMachineState = {
@@ -84,8 +89,8 @@ export type SheetMachineEffect =
 export type SheetMachineResult = {
   state: SheetMachineState;
   effects: SheetMachineEffect[];
-  /** When true, caller should not capture pointer — native scroll takes over. */
-  releaseToScroll?: boolean;
+  /** Positive values scroll content down (increase scrollTop). */
+  bodyScrollDeltaPx?: number;
 };
 
 function scrollEnabled(state: SheetMachineState): boolean {
@@ -97,6 +102,52 @@ function clampHeight(state: SheetMachineState, heightPx: number): number {
     state.fullHeightPx,
     Math.max(state.collapsedHeightPx, heightPx),
   );
+}
+
+function createGesture(args: {
+  pointerId: number;
+  clientY: number;
+  startHeightPx: number;
+  intent: SheetGestureIntent;
+  surface: SheetPointerSurface;
+  scrollTopPx: number;
+}): SheetGesture {
+  return {
+    pointerId: args.pointerId,
+    startClientY: args.clientY,
+    startHeightPx: args.startHeightPx,
+    intent: args.intent,
+    surface: args.surface,
+    lastClientY: args.clientY,
+    startScrollTopPx: args.scrollTopPx,
+  };
+}
+
+function reanchorSheetGesture(
+  gesture: SheetGesture,
+  clientY: number,
+  visibleHeightPx: number,
+): SheetGesture {
+  return {
+    ...gesture,
+    intent: "sheet",
+    startClientY: clientY,
+    startHeightPx: visibleHeightPx,
+    lastClientY: clientY,
+  };
+}
+
+function beginScrollGesture(
+  gesture: SheetGesture,
+  clientY: number,
+  scrollTopPx: number,
+): SheetGesture {
+  return {
+    ...gesture,
+    intent: "scroll",
+    lastClientY: clientY,
+    startScrollTopPx: scrollTopPx,
+  };
 }
 
 export function createInitialSheetMachineState(args: {
@@ -211,13 +262,14 @@ function reducePointerDown(
   }
 
   if (event.surface === "chrome") {
-    const gesture: SheetGesture = {
+    const gesture = createGesture({
       pointerId: event.pointerId,
-      startClientY: event.clientY,
+      clientY: event.clientY,
       startHeightPx: state.visibleHeightPx,
       intent: "sheet",
       surface: "chrome",
-    };
+      scrollTopPx: event.scrollTopPx,
+    });
 
     return {
       state: { ...state, phase: "dragging", gesture },
@@ -226,29 +278,24 @@ function reducePointerDown(
   }
 
   const canScroll = scrollEnabled(state);
-  if (canScroll && event.scrollTopPx > 1) {
-    return { state, effects: [], releaseToScroll: true };
-  }
+  const intent: SheetGestureIntent = canScroll
+    ? event.scrollTopPx <= SCROLL_TOP_EPSILON_PX
+      ? "pendingAxis"
+      : "scroll"
+    : "sheet";
 
-  const gesture: SheetGesture = {
+  const gesture = createGesture({
     pointerId: event.pointerId,
-    startClientY: event.clientY,
+    clientY: event.clientY,
     startHeightPx: state.visibleHeightPx,
-    intent: canScroll ? "pendingAxis" : "sheet",
+    intent,
     surface: "body",
-  };
+    scrollTopPx: event.scrollTopPx,
+  });
 
   return {
     state: { ...state, phase: "dragging", gesture },
-    effects: gesture.intent === "sheet" ? [{ type: "notifyDragStart" }] : [],
-  };
-}
-
-function releaseToScrollResult(state: SheetMachineState): SheetMachineResult {
-  return {
-    state: { ...state, phase: "idle", gesture: null },
-    effects: [{ type: "notifyDragEnd" }],
-    releaseToScroll: true,
+    effects: intent === "sheet" ? [{ type: "notifyDragStart" }] : [],
   };
 }
 
@@ -256,7 +303,7 @@ function reducePointerMove(
   state: SheetMachineState,
   event: SheetMachinePointerMove,
 ): SheetMachineResult {
-  let gesture = state.gesture;
+  const gesture = state.gesture;
   if (!gesture || gesture.pointerId !== event.pointerId) {
     return { state, effects: [] };
   }
@@ -264,30 +311,92 @@ function reducePointerMove(
   const effects: SheetMachineEffect[] = [];
 
   if (gesture.intent === "pendingAxis") {
-    const deltaY = event.clientY - gesture.startClientY;
-    if (Math.abs(deltaY) < SHEET_AXIS_THRESHOLD_PX) {
-      return { state, effects: [] };
-    }
-    if (deltaY < 0) {
-      return releaseToScrollResult(state);
-    }
-    gesture = { ...gesture, intent: "sheet" };
-    effects.push({ type: "notifyDragStart" });
+    return reducePendingAxisMove(state, event, gesture, effects);
   }
 
-  if (gesture.intent !== "sheet") {
+  if (gesture.intent === "scroll") {
+    return reduceScrollMove(state, event, gesture, effects);
+  }
+
+  return reduceSheetMove(state, event, gesture, effects);
+}
+
+function reducePendingAxisMove(
+  state: SheetMachineState,
+  event: SheetMachinePointerMove,
+  gesture: SheetGesture,
+  effects: SheetMachineEffect[],
+): SheetMachineResult {
+  const totalDeltaY = event.clientY - gesture.startClientY;
+  if (Math.abs(totalDeltaY) < SHEET_AXIS_THRESHOLD_PX) {
     return { state, effects: [] };
   }
 
-  if (
-    gesture.surface === "body" &&
-    scrollEnabled(state) &&
-    event.scrollTopPx > 1 &&
-    gesture.startHeightPx >= state.fullHeightPx - FULL_HEIGHT_EPSILON_PX
-  ) {
-    return releaseToScrollResult(state);
+  if (totalDeltaY < 0) {
+    const excessUp = -totalDeltaY - SHEET_AXIS_THRESHOLD_PX;
+    return {
+      state: {
+        ...state,
+        visibleHeightPx: state.fullHeightPx,
+        gesture: beginScrollGesture(gesture, event.clientY, event.scrollTopPx),
+      },
+      effects,
+      bodyScrollDeltaPx: excessUp > 0 ? excessUp : undefined,
+    };
   }
 
+  const excessDown = totalDeltaY - SHEET_AXIS_THRESHOLD_PX;
+  const nextHeight = clampHeight(state, state.fullHeightPx - excessDown);
+  effects.push({ type: "notifyDragStart" });
+
+  return {
+    state: {
+      ...state,
+      visibleHeightPx: nextHeight,
+      gesture: reanchorSheetGesture(gesture, event.clientY, nextHeight),
+    },
+    effects,
+  };
+}
+
+function reduceScrollMove(
+  state: SheetMachineState,
+  event: SheetMachinePointerMove,
+  gesture: SheetGesture,
+  effects: SheetMachineEffect[],
+): SheetMachineResult {
+  const deltaY = event.clientY - gesture.lastClientY;
+  const atScrollTop = event.scrollTopPx <= SCROLL_TOP_EPSILON_PX;
+
+  if (atScrollTop && deltaY > 0) {
+    const nextHeight = clampHeight(state, state.visibleHeightPx - deltaY);
+    effects.push({ type: "notifyDragStart" });
+    return {
+      state: {
+        ...state,
+        visibleHeightPx: nextHeight,
+        gesture: reanchorSheetGesture(gesture, event.clientY, nextHeight),
+      },
+      effects,
+    };
+  }
+
+  return {
+    state: {
+      ...state,
+      gesture: { ...gesture, lastClientY: event.clientY },
+    },
+    effects,
+    bodyScrollDeltaPx: -deltaY,
+  };
+}
+
+function reduceSheetMove(
+  state: SheetMachineState,
+  event: SheetMachinePointerMove,
+  gesture: SheetGesture,
+  effects: SheetMachineEffect[],
+): SheetMachineResult {
   const nextHeight = clampHeight(
     state,
     snapHeightFromPanDelta({
@@ -299,8 +408,34 @@ function reducePointerMove(
     }),
   );
 
+  if (gesture.surface === "body" && scrollEnabled(state)) {
+    const fingerUpPx = Math.max(0, gesture.lastClientY - event.clientY);
+    const sheetGrowthPx = Math.max(0, nextHeight - state.visibleHeightPx);
+    const scrollExcessPx = fingerUpPx - sheetGrowthPx;
+
+    if (scrollExcessPx > 0) {
+      return {
+        state: {
+          ...state,
+          visibleHeightPx: state.fullHeightPx,
+          gesture: beginScrollGesture(
+            gesture,
+            event.clientY,
+            event.scrollTopPx,
+          ),
+        },
+        effects,
+        bodyScrollDeltaPx: scrollExcessPx,
+      };
+    }
+  }
+
   return {
-    state: { ...state, visibleHeightPx: nextHeight, gesture },
+    state: {
+      ...state,
+      visibleHeightPx: nextHeight,
+      gesture: { ...gesture, lastClientY: event.clientY },
+    },
     effects,
   };
 }

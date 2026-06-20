@@ -50,9 +50,9 @@ Omit `header` for handle-only layouts — collapsed snap is handle height only.
 |------|----------|
 | Handle + header (chrome) | Sheet drag at all snaps — even when body is scrolled at full |
 | Body below divider | Sheet drag below full height |
-| Body at full height | Scroll when content scrolled; at scroll top, drag down collapses, drag up scrolls |
+| Body at full height | Scroll when content is scrolled; at scroll top, drag down collapses, drag up scrolls |
 
-When the sheet settles to a new snap, body scroll resets to the top.
+Body scroll is driven by the sheet gesture while the pointer is down (same continuous drag can expand the sheet, scroll content, then collapse). When the sheet settles to a new snap, body scroll resets to the top.
 
 Do **not** add `overflow-y-auto` to body content — the shell owns scroll on the body root.
 

@@ -51,6 +51,7 @@ function tryReleasePointerCapture(
 export function useSheetPointerHandlers(
   dispatch: (event: SheetMachineEvent) => SheetMachineResult,
   readScrollTop: () => number,
+  applyBodyScrollDelta: (deltaPx: number) => void,
 ): SheetPointerHandlers {
   const capturedPointerIdRef = useRef<number | null>(null);
   const captureTargetRef = useRef<HTMLElement | null>(null);
@@ -60,9 +61,11 @@ export function useSheetPointerHandlers(
   } | null>(null);
   const dispatchRef = useRef(dispatch);
   const readScrollTopRef = useRef(readScrollTop);
+  const applyBodyScrollDeltaRef = useRef(applyBodyScrollDelta);
 
   dispatchRef.current = dispatch;
   readScrollTopRef.current = readScrollTop;
+  applyBodyScrollDeltaRef.current = applyBodyScrollDelta;
 
   const removeDocumentListeners = useCallback(() => {
     const listeners = documentListenersRef.current;
@@ -89,6 +92,26 @@ export function useSheetPointerHandlers(
     [removeDocumentListeners],
   );
 
+  const applyMoveResult = useCallback(
+    (event: PointerEvent, result: SheetMachineResult) => {
+      if (
+        result.bodyScrollDeltaPx !== undefined &&
+        result.bodyScrollDeltaPx !== 0
+      ) {
+        applyBodyScrollDeltaRef.current(result.bodyScrollDeltaPx);
+      }
+
+      const intent = result.state.gesture?.intent;
+      if (
+        result.state.phase === "dragging" &&
+        (intent === "sheet" || intent === "scroll")
+      ) {
+        event.preventDefault();
+      }
+    },
+    [],
+  );
+
   const onDocumentPointerMove = useCallback(
     (event: PointerEvent) => {
       if (capturedPointerIdRef.current !== event.pointerId) {
@@ -102,19 +125,9 @@ export function useSheetPointerHandlers(
         scrollTopPx: readScrollTopRef.current(),
       });
 
-      if (result.releaseToScroll) {
-        endCapture(event.pointerId);
-        return;
-      }
-
-      if (
-        result.state.phase === "dragging" &&
-        result.state.gesture?.intent === "sheet"
-      ) {
-        event.preventDefault();
-      }
+      applyMoveResult(event, result);
     },
-    [endCapture],
+    [applyMoveResult],
   );
 
   const onDocumentPointerEnd = useCallback(
@@ -147,10 +160,6 @@ export function useSheetPointerHandlers(
           scrollTopPx: readScrollTopRef.current(),
           surface,
         });
-
-        if (result.releaseToScroll) {
-          return;
-        }
 
         if (result.state.phase !== "dragging") {
           return;

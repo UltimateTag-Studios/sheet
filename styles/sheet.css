@@ -91,6 +91,7 @@
 
 .sheet-body-root--scroll {
   overflow-y: auto;
+  touch-action: none;
 }
 
 .sheet-body-root--drag {

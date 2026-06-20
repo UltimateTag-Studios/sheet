@@ -40,7 +40,7 @@ describe("reduceSheetMachine", () => {
     expect(result.effects).toContainEqual({ type: "notifyDragStart" });
   });
 
-  it("does not capture when body is scrolled at full height", () => {
+  it("enters scroll intent when body is scrolled at full height", () => {
     const initial = createInitialSheetMachineState({
       restingSnap: "full",
       ...baseHeights,
@@ -54,8 +54,9 @@ describe("reduceSheetMachine", () => {
       surface: "body",
     });
 
-    expect(result.releaseToScroll).toBe(true);
-    expect(result.state.phase).toBe("idle");
+    expect(result.state.phase).toBe("dragging");
+    expect(result.state.gesture?.intent).toBe("scroll");
+    expect(result.effects).toEqual([]);
   });
 
   it("captures chrome drag when body is scrolled at full height", () => {
@@ -72,7 +73,6 @@ describe("reduceSheetMachine", () => {
       surface: "chrome",
     });
 
-    expect(result.releaseToScroll).toBeUndefined();
     expect(result.state.phase).toBe("dragging");
     expect(result.state.gesture?.intent).toBe("sheet");
     expect(result.state.gesture?.surface).toBe("chrome");
@@ -100,7 +100,6 @@ describe("reduceSheetMachine", () => {
       scrollTopPx: 48,
     });
 
-    expect(result.releaseToScroll).toBeUndefined();
     expect(result.state.gesture?.intent).toBe("sheet");
     expect(result.state.visibleHeightPx).toBeLessThan(700);
   });
@@ -123,7 +122,7 @@ describe("reduceSheetMachine", () => {
     expect(result.effects).toEqual([]);
   });
 
-  it("hands upward moves to scroll at full height", () => {
+  it("transitions upward pendingAxis moves to scroll at full height", () => {
     let state = createInitialSheetMachineState({
       restingSnap: "full",
       ...baseHeights,
@@ -144,11 +143,11 @@ describe("reduceSheetMachine", () => {
       scrollTopPx: 0,
     });
 
-    expect(result.releaseToScroll).toBe(true);
-    expect(result.state.phase).toBe("idle");
+    expect(result.state.gesture?.intent).toBe("scroll");
+    expect(result.bodyScrollDeltaPx).toBe(12);
   });
 
-  it("pans sheet on downward move from pendingAxis", () => {
+  it("reanchors sheet on downward move from pendingAxis", () => {
     let state = createInitialSheetMachineState({
       restingSnap: "full",
       ...baseHeights,
@@ -170,8 +169,78 @@ describe("reduceSheetMachine", () => {
     });
 
     expect(result.state.gesture?.intent).toBe("sheet");
+    expect(result.state.gesture?.startClientY).toBe(420);
+    expect(result.state.gesture?.startHeightPx).toBe(688);
+    expect(result.state.visibleHeightPx).toBe(688);
+    expect(result.effects).toContainEqual({ type: "notifyDragStart" });
+  });
+
+  it("transitions scroll to sheet when reaching scroll top while dragging down", () => {
+    let state = createInitialSheetMachineState({
+      restingSnap: "full",
+      ...baseHeights,
+    });
+
+    state = reduceSheetMachine(state, {
+      type: "pointerDown",
+      pointerId: 1,
+      clientY: 400,
+      scrollTopPx: 48,
+      surface: "body",
+    }).state;
+
+    state = reduceSheetMachine(state, {
+      type: "pointerMove",
+      pointerId: 1,
+      clientY: 430,
+      scrollTopPx: 18,
+    }).state;
+
+    const result = reduceSheetMachine(state, {
+      type: "pointerMove",
+      pointerId: 1,
+      clientY: 440,
+      scrollTopPx: 0,
+    });
+
+    expect(result.state.gesture?.intent).toBe("sheet");
     expect(result.state.visibleHeightPx).toBeLessThan(700);
     expect(result.effects).toContainEqual({ type: "notifyDragStart" });
+  });
+
+  it("transitions sheet to scroll when expanding past full height", () => {
+    let state = createInitialSheetMachineState({
+      restingSnap: "half",
+      ...baseHeights,
+    });
+
+    state = reduceSheetMachine(state, {
+      type: "pointerDown",
+      pointerId: 1,
+      clientY: 400,
+      scrollTopPx: 0,
+      surface: "body",
+    }).state;
+
+    state = reduceSheetMachine(state, {
+      type: "pointerMove",
+      pointerId: 1,
+      clientY: 50,
+      scrollTopPx: 0,
+    }).state;
+
+    expect(state.visibleHeightPx).toBe(700);
+
+    const result = reduceSheetMachine(state, {
+      type: "pointerMove",
+      pointerId: 1,
+      clientY: 40,
+      scrollTopPx: 0,
+    });
+
+    expect(result.state.visibleHeightPx).toBe(700);
+    expect(result.state.gesture?.intent).toBe("scroll");
+    expect(result.bodyScrollDeltaPx).toBe(10);
   });
 
   it("updates height while dragging at half snap", () => {

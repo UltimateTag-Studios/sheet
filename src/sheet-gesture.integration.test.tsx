@@ -49,39 +49,84 @@ function TestFullSheetWithScroll() {
   );
 }
 
+function TestHalfSheetWithScroll() {
+  const [snap, setSnap] = useState<SheetSnap>("half");
+
+  return (
+    <>
+      <div data-testid="snap">{snap}</div>
+      <Sheet snap={snap} onSnapChange={setSnap}>
+        <SheetLayout
+          header={<div data-testid="sheet-header">Header title</div>}
+          body={
+            <div data-testid="tall-body" style={{ height: "2000px" }}>
+              Body
+            </div>
+          }
+        />
+      </Sheet>
+    </>
+  );
+}
+
+function stubScrollRootDimensions(
+  scrollRoot: HTMLDivElement,
+  clientHeight: number,
+  scrollHeight: number,
+) {
+  Object.defineProperty(scrollRoot, "clientHeight", {
+    configurable: true,
+    value: clientHeight,
+  });
+  Object.defineProperty(scrollRoot, "scrollHeight", {
+    configurable: true,
+    value: scrollHeight,
+  });
+}
+
+function pointerDown(surface: Element, pointerId: number, clientY: number) {
+  act(() => {
+    fireEvent.pointerDown(surface, {
+      pointerId,
+      clientY,
+      button: 0,
+    });
+  });
+}
+
+function pointerMove(pointerId: number, clientY: number) {
+  act(() => {
+    document.dispatchEvent(
+      new PointerEvent("pointermove", {
+        pointerId,
+        clientY,
+        bubbles: true,
+      }),
+    );
+  });
+}
+
+function pointerUp(pointerId: number, clientY: number) {
+  act(() => {
+    document.dispatchEvent(
+      new PointerEvent("pointerup", {
+        pointerId,
+        clientY,
+        bubbles: true,
+      }),
+    );
+  });
+}
+
 function dragSurface(
   surface: Element,
   pointerId: number,
   startY: number,
   endY: number,
 ) {
-  act(() => {
-    fireEvent.pointerDown(surface, {
-      pointerId,
-      clientY: startY,
-      button: 0,
-    });
-  });
-
-  act(() => {
-    document.dispatchEvent(
-      new PointerEvent("pointermove", {
-        pointerId,
-        clientY: endY,
-        bubbles: true,
-      }),
-    );
-  });
-
-  act(() => {
-    document.dispatchEvent(
-      new PointerEvent("pointerup", {
-        pointerId,
-        clientY: endY,
-        bubbles: true,
-      }),
-    );
-  });
+  pointerDown(surface, pointerId, startY);
+  pointerMove(pointerId, endY);
+  pointerUp(pointerId, endY);
 }
 
 describe("Sheet gesture integration", () => {
@@ -139,5 +184,90 @@ describe("Sheet gesture integration", () => {
 
     expect(screen.getByTestId("snap").textContent).not.toBe("full");
     expect(scrollRoot.scrollTop).toBe(0);
+  });
+
+  it("transitions from half sheet drag to body scroll at full height", () => {
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: 800,
+      writable: true,
+    });
+
+    render(<TestHalfSheetWithScroll />);
+
+    const body = document.querySelector("[data-sheet-scroll-root]");
+    if (!(body instanceof HTMLDivElement)) {
+      throw new Error("Expected sheet scroll root");
+    }
+
+    stubScrollRootDimensions(body, 400, 2000);
+
+    pointerDown(body, 3, 500);
+    pointerMove(3, 100);
+    pointerMove(3, 80);
+
+    expect(body.scrollTop).toBeGreaterThan(0);
+  });
+
+  it("collapses from full when body scroll reaches top during one drag", () => {
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: 800,
+      writable: true,
+    });
+
+    render(<TestFullSheetWithScroll />);
+
+    const body = document.querySelector("[data-sheet-scroll-root]");
+    if (!(body instanceof HTMLDivElement)) {
+      throw new Error("Expected sheet scroll root");
+    }
+
+    act(() => {
+      body.scrollTop = 120;
+    });
+
+    stubScrollRootDimensions(body, 400, 2000);
+
+    pointerDown(body, 4, 300);
+    pointerMove(4, 360);
+    pointerMove(4, 420);
+    pointerMove(4, 480);
+
+    expect(body.scrollTop).toBe(0);
+    expect(
+      document.querySelector(".sheet-drawer")?.getAttribute("data-sheet-phase"),
+    ).toBe("dragging");
+    expect(
+      Number.parseInt(
+        document
+          .querySelector(".sheet-drawer")
+          ?.style.transform.match(/translate3d\(0, (\d+)px, 0\)/)?.[1] ?? "0",
+        10,
+      ),
+    ).toBeGreaterThan(0);
+  });
+
+  it("collapses from full at scroll top without snapping back on release", () => {
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: 800,
+      writable: true,
+    });
+
+    render(<TestFullSheetWithScroll />);
+
+    const body = document.querySelector("[data-sheet-scroll-root]");
+    if (!(body instanceof HTMLDivElement)) {
+      throw new Error("Expected sheet scroll root");
+    }
+
+    stubScrollRootDimensions(body, 400, 2000);
+
+    pointerDown(body, 5, 300);
+    pointerMove(5, 520);
+    pointerUp(5, 520);
+
+    expect(screen.getByTestId("snap").textContent).not.toBe("full");
   });
 });

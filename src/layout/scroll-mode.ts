@@ -1,7 +1,7 @@
 import type { SheetSnap } from "./snap-math";
 
 export const FULL_HEIGHT_EPSILON_PX = 2;
-const SCROLL_TOP_EPSILON_PX = 1;
+export const SCROLL_TOP_EPSILON_PX = 1;
 
 /** Body overflow scroll when at full height (live during drag, resting snap when idle). */
 export function canBodyScroll(args: {
