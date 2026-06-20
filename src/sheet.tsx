@@ -5,6 +5,7 @@ import { SheetContextProvider } from "./context/sheet-context";
 import { useSheetMachine } from "./gesture/use-sheet-machine";
 import { useSheetPointerHandlers } from "./gesture/use-sheet-pointer-handlers";
 import { useSheetBodyScroll } from "./hooks/use-sheet-body-scroll";
+import { isSheetCollapsedPeek } from "./layout/collapsed-bottom-chrome-padding";
 import {
   DEFAULT_HALF_SNAP_FRACTION,
   normalizeHalfSnapFraction,
@@ -96,6 +97,9 @@ export function Sheet({
 
   const onTransitionEnd = useCallback(
     (event: TransitionEvent<HTMLDivElement>) => {
+      if (event.target !== event.currentTarget) {
+        return;
+      }
       if (event.propertyName !== "transform") {
         return;
       }
@@ -131,20 +135,32 @@ export function Sheet({
     ],
   );
 
+  const collapsedPeek = isSheetCollapsedPeek({
+    sheetSnap: state.restingSnap,
+    isDragging: state.phase === "dragging",
+    visibleHeightPx: state.visibleHeightPx,
+    collapsedHeightPx,
+  });
+
   return (
     <div
       className="sheet"
-      style={{
-        bottom: "0px",
-        ...sheetStyle,
-        ...transformStyle,
-      }}
-      onTransitionEnd={onTransitionEnd}
+      style={{ bottom: "0px" }}
       data-sheet-phase={state.phase}
+      data-sheet-collapsed-peek={collapsedPeek ? "" : undefined}
     >
-      <SheetContextProvider value={contextValue}>
-        <div className="sheet-inner">{children}</div>
-      </SheetContextProvider>
+      <div
+        className="sheet-slide"
+        style={{
+          ...sheetStyle,
+          ...transformStyle,
+        }}
+        onTransitionEnd={onTransitionEnd}
+      >
+        <SheetContextProvider value={contextValue}>
+          <div className="sheet-inner">{children}</div>
+        </SheetContextProvider>
+      </div>
     </div>
   );
 }

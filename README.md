@@ -110,9 +110,9 @@ Chrome surface always uses `sheet` intent.
 |------|---------|-------------|
 | `halfSnapFraction` | `0.5` | Fraction snap between collapsed and full |
 | `collapsedBottomInsetPx` | `0` | Extra collapsed height without DOM |
-| `sheetStyle` / `sheetHandleStyle` | — | CSS overrides (prefer theme CSS on `.sheet`) |
+| `sheetStyle` / `sheetHandleStyle` | — | CSS overrides (prefer theme CSS on `.sheet-slide`) |
 
-The sheet root is `position: fixed` with **no default `z-index`**. Stack order comes from **DOM order**: render the sheet before app chrome that must sit on top (floating tab bars, modals, etc.). `@siegetag/sheet-map` renders map → overlay → sheet inside the shell; your tab bar should be a **later sibling** of the map route (see SiegeTag `MainTabsLayout`).
+The sheet root is `position: fixed` with **no `z-index`**. Translate animation runs on **`.sheet-slide`** so the fixed root does not create a transform stacking context that jumps above later DOM siblings (tab bars, etc.). Stack order: render the map shell first, then app chrome that must sit on top.
 
 ## Theming
 
@@ -120,10 +120,11 @@ Override semantic classes from `@siegetag/sheet/styles.css`:
 
 | Class | Purpose |
 |-------|---------|
-| `.sheet` | Root surface (background, border, shadow) |
+| `.sheet` | Fixed viewport anchor (no surface styling — do not set `z-index`) |
+| `.sheet-slide` | Translated surface (background, border, shadow) |
 | `.sheet-handle` | Drag pill |
 | `.sheet-header` | Optional header content area |
-| `.sheet-divider` | Line between chrome and body |
+| `.sheet-divider` | Line between chrome and body (hidden at collapsed peek via `data-sheet-collapsed-peek`) |
 | `.sheet-body-root--scroll` | Body at full height (overflow scroll) |
 | `.sheet-body-root--drag` | Body below full height (overflow hidden) |
 

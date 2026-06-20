@@ -346,6 +346,52 @@ describe("reduceSheetMachine", () => {
     });
   });
 
+  it("measure updates visible height while settling after collapsed chrome grows", () => {
+    const initial = createInitialSheetMachineState({
+      restingSnap: "collapsed",
+      collapsedHeightPx: 150,
+      halfHeightPx: 350,
+      fullHeightPx: 700,
+    });
+    const settling = {
+      ...initial,
+      phase: "settling" as const,
+      visibleHeightPx: 150,
+    };
+
+    const result = reduceSheetMachine(settling, {
+      type: "measure",
+      collapsedHeightPx: 210,
+      halfHeightPx: 350,
+      fullHeightPx: 700,
+    });
+
+    expect(result.state.visibleHeightPx).toBe(210);
+    expect(result.state.collapsedHeightPx).toBe(210);
+  });
+
+  it("measure does not override visible height while dragging", () => {
+    const initial = createInitialSheetMachineState({
+      restingSnap: "half",
+      ...baseHeights,
+    });
+    const dragging = {
+      ...initial,
+      phase: "dragging" as const,
+      visibleHeightPx: 280,
+    };
+
+    const result = reduceSheetMachine(dragging, {
+      type: "measure",
+      collapsedHeightPx: 180,
+      halfHeightPx: 350,
+      fullHeightPx: 700,
+    });
+
+    expect(result.state.visibleHeightPx).toBe(280);
+    expect(result.state.collapsedHeightPx).toBe(180);
+  });
+
   it("measure updates idle height for resting snap", () => {
     const initial = createInitialSheetMachineState({
       restingSnap: "half",

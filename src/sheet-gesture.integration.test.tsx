@@ -176,9 +176,9 @@ describe("Sheet gesture integration", () => {
     dragSurface(chrome, 1, 400, 100);
 
     expect(screen.getByTestId("snap").textContent).toBe("full");
-    expect(document.querySelector<HTMLElement>(".sheet")?.style.transform).toBe(
-      "translate3d(0, 0px, 0)",
-    );
+    expect(
+      document.querySelector<HTMLElement>(".sheet-slide")?.style.transform,
+    ).toBe("translate3d(0, 0px, 0)");
   });
 
   it("drags chrome from full when body is scrolled and resets scroll on snap change", () => {
@@ -263,7 +263,7 @@ describe("Sheet gesture integration", () => {
     expect(
       document.querySelector(".sheet")?.getAttribute("data-sheet-phase"),
     ).toBe("dragging");
-    const sheetEl = document.querySelector<HTMLElement>(".sheet");
+    const sheetEl = document.querySelector<HTMLElement>(".sheet-slide");
     expect(
       Number.parseInt(
         sheetEl?.style.transform.match(/translate3d\(0, (\d+)px, 0\)/)?.[1] ??

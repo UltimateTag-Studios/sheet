@@ -205,8 +205,17 @@ function reduceMeasure(
     halfHeightPx: event.halfHeightPx,
     fullHeightPx: event.fullHeightPx,
   };
+  const nextState = { ...state, ...measuredHeights };
+
+  if (state.phase === "dragging") {
+    return {
+      state: nextState,
+      effects: [],
+    };
+  }
+
   const nextHeight = clampHeight(
-    { ...state, ...measuredHeights },
+    nextState,
     heightForSnap(
       state.restingSnap,
       event.collapsedHeightPx,
@@ -215,15 +224,8 @@ function reduceMeasure(
     ),
   );
 
-  if (state.phase !== "idle") {
-    return {
-      state: { ...state, ...measuredHeights },
-      effects: [],
-    };
-  }
-
   return {
-    state: { ...state, ...measuredHeights, visibleHeightPx: nextHeight },
+    state: { ...nextState, visibleHeightPx: nextHeight },
     effects: [],
   };
 }

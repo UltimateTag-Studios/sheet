@@ -16,9 +16,17 @@
   position: fixed;
   inset-inline: 0;
   bottom: 0;
+  height: 100dvh;
+  overflow: hidden;
+  pointer-events: none;
+  outline: none;
+}
+
+.sheet-slide {
   display: flex;
   flex-direction: column;
   height: 100dvh;
+  pointer-events: auto;
   outline: none;
 
   border-radius: 0.75rem;
@@ -29,7 +37,7 @@
   backdrop-filter: blur(24px);
 }
 
-.sheet[data-sheet-phase="dragging"] {
+.sheet[data-sheet-phase="dragging"] .sheet-slide {
   touch-action: none;
 }
 
@@ -74,6 +82,10 @@
 
 .sheet-divider {
   border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.sheet[data-sheet-collapsed-peek] .sheet-divider {
+  border-bottom: none;
 }
 
 /** Mirrors handle block below header content for vertical balance with the handle bar. */
