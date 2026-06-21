@@ -14,11 +14,15 @@ import {
   normalizeHalfSnapFraction,
 } from "./layout/normalize-half-snap-fraction";
 import { canBodyScroll } from "./layout/scroll-mode";
+import type { SheetLayoutFrameChange } from "./layout/sheet-layout-frame-change";
+import { toSheetLayoutFrameChange } from "./layout/sheet-layout-frame-change";
 import { readVisibleSheetHeightPx } from "./layout/snap-heights";
 import type { SheetSnap } from "./layout/snap-math";
 import { syncSheetDomFrame } from "./layout/sync-sheet-dom-frame";
 import type { SheetSnapHeights } from "./layout/use-snap-heights";
 import type { SheetMachineState } from "./machine/sheet-machine";
+
+export type { SheetLayoutFrameChange };
 
 export type { SheetSnap };
 export { DEFAULT_HALF_SNAP_FRACTION };
@@ -44,6 +48,12 @@ export type SheetProps = {
   }) => void;
   /** Fires after the sheet CSS height transition completes at a snap. */
   onSnapSettled?: (snap: SheetSnap) => void;
+  /**
+   * Fires when the machine commits a layout frame (drag move, snap apply, settle start).
+   * During drag, `visibleHeightPx` matches the live `.sheet-slide` DOM height.
+   * During CSS height transitions, read `.sheet-slide` geometry for in-between heights.
+   */
+  onLayoutFrameChange?: (frame: SheetLayoutFrameChange) => void;
 };
 
 export function Sheet({
@@ -57,6 +67,7 @@ export function Sheet({
   sheetHandleStyle,
   onSnapHeightsChange,
   onSnapSettled,
+  onLayoutFrameChange,
 }: SheetProps) {
   const hostEl = useSheetHostEl();
   const resolvedHalfSnap = normalizeHalfSnapFraction(halfSnapFraction);
@@ -82,15 +93,29 @@ export function Sheet({
     onLayoutMeasureRef,
   });
 
-  const applyDragFrame = useCallback((machineState: SheetMachineState) => {
-    syncSheetDomFrame({
-      machineState,
-      sheetRoot: sheetRootRef.current,
-      sheetSlide: sheetSlideRef.current,
-      bodyRoot: bodyRootRef.current,
-      canBodyScrollRef,
-    });
-  }, []);
+  const onLayoutFrameChangeRef = useRef(onLayoutFrameChange);
+  onLayoutFrameChangeRef.current = onLayoutFrameChange;
+
+  const emitLayoutFrameChange = useCallback(
+    (machineState: SheetMachineState) => {
+      onLayoutFrameChangeRef.current?.(toSheetLayoutFrameChange(machineState));
+    },
+    [],
+  );
+
+  const applyDragFrame = useCallback(
+    (machineState: SheetMachineState) => {
+      syncSheetDomFrame({
+        machineState,
+        sheetRoot: sheetRootRef.current,
+        sheetSlide: sheetSlideRef.current,
+        bodyRoot: bodyRootRef.current,
+        canBodyScrollRef,
+      });
+      emitLayoutFrameChange(machineState);
+    },
+    [emitLayoutFrameChange],
+  );
 
   const { state, isReady, dispatch } = useSheetMachine({
     restingSnap,
@@ -159,6 +184,14 @@ export function Sheet({
   const stateRefForSettle = useRef(state);
   stateRefForSettle.current = state;
 
+  const notifyRestLayoutFrame = useCallback(() => {
+    const machineState = stateRefForSettle.current;
+    if (!machineState || machineState.phase === "dragging") {
+      return;
+    }
+    emitLayoutFrameChange(machineState);
+  }, [emitLayoutFrameChange]);
+
   const { frameStyle, onTransitionEnd } = useSheetSlideFrame({
     visibleHeightPx: state?.visibleHeightPx ?? 0,
     phase: state?.phase ?? "idle",
@@ -171,6 +204,7 @@ export function Sheet({
         onSnapSettledRef.current?.(snap);
       }
     },
+    onLayoutFrameApplied: notifyRestLayoutFrame,
   });
 
   const [canBodyScrollEnabled, setCanBodyScrollEnabled] = useState(false);

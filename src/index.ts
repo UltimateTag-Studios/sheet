@@ -8,6 +8,8 @@ export type { SheetHostProps } from "./context/sheet-host-context";
 export { SheetHost, useSheetHostEl } from "./context/sheet-host-context";
 export { isSheetAtCollapsedHeader } from "./layout/collapsed-header-state";
 export { normalizeHalfSnapFraction } from "./layout/normalize-half-snap-fraction";
+export type { SheetLayoutFrameChange } from "./layout/sheet-layout-frame-change";
+export { toSheetLayoutFrameChange } from "./layout/sheet-layout-frame-change";
 export type {
   SheetGeometry,
   SheetStyles,

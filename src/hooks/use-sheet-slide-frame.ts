@@ -12,6 +12,8 @@ export type UseSheetSlideFrameOptions = {
   /** When false, chrome is laid out invisibly until the machine has measured heights. */
   enabled: boolean;
   onSettleComplete: () => void;
+  /** Fires after the slide frame is applied at rest (idle / settling). */
+  onLayoutFrameApplied?: () => void;
 };
 
 export function useSheetSlideFrame({
@@ -20,6 +22,7 @@ export function useSheetSlideFrame({
   sheetSlideRef,
   enabled,
   onSettleComplete,
+  onLayoutFrameApplied,
 }: UseSheetSlideFrameOptions) {
   const suppressInitialLayoutTransitionRef = useRef(true);
 
@@ -54,7 +57,8 @@ export function useSheetSlideFrame({
     if (suppress) {
       suppressInitialLayoutTransitionRef.current = false;
     }
-  }, [enabled, phase, sheetSlideRef, visibleHeightPx]);
+    onLayoutFrameApplied?.();
+  }, [enabled, onLayoutFrameApplied, phase, sheetSlideRef, visibleHeightPx]);
 
   const onTransitionEnd = useCallback(
     (event: TransitionEvent<HTMLDivElement>) => {

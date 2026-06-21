@@ -511,4 +511,39 @@ describe("Sheet gesture integration", () => {
 
     expect(screen.getByTestId("snap").textContent).not.toBe("full");
   });
+
+  it("emits onLayoutFrameChange during chrome drag with live visibleHeightPx", () => {
+    const onLayoutFrameChange = vi.fn();
+
+    renderWithHost(
+      <Sheet snap="half" onLayoutFrameChange={onLayoutFrameChange}>
+        <SheetLayout
+          header={<div data-testid="sheet-header">Header title</div>}
+          body={<div>Body</div>}
+        />
+      </Sheet>,
+    );
+
+    onLayoutFrameChange.mockClear();
+
+    const chrome = document.querySelector("[data-sheet-chrome]");
+    if (!chrome) {
+      throw new Error("Expected sheet chrome");
+    }
+
+    pointerDown(chrome, 12, 500);
+    pointerMove(12, 460);
+    pointerMove(12, 420);
+
+    expect(onLayoutFrameChange).toHaveBeenCalled();
+    const dragFrames = onLayoutFrameChange.mock.calls
+      .map(([frame]) => frame)
+      .filter((frame) => frame.phase === "dragging");
+    expect(dragFrames.length).toBeGreaterThan(0);
+    const latestDragFrame = dragFrames.at(-1);
+    expect(latestDragFrame?.visibleHeightPx).toBe(slideHeightPx());
+    expect(latestDragFrame?.visibleHeightPx).toBeGreaterThan(400);
+
+    pointerUp(12, 420);
+  });
 });

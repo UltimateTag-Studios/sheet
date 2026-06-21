@@ -115,6 +115,30 @@ Chrome surface always uses `sheet` intent.
 | `isSheetAtCollapsedHeader` | Whether sheet is at collapsed header height (divider hide) |
 | `buildSheetStyle` / `buildSheetLayoutVars` | Handle geometry tokens |
 | `getVisibleSheetHeightPx` | Measure visible sheet slide height |
+| `toSheetLayoutFrameChange` | Map machine state → `SheetLayoutFrameChange` payload |
+| `SheetLayoutFrameChange` | Layout frame callback payload type |
+
+## Live layout for map / overlay integrators
+
+Consumers that align external UI with the sheet (map padding, visible-area overlays) need **live geometry while the sheet moves**.
+
+| Source | When to use |
+|--------|-------------|
+| **`onLayoutFrameChange`** | Drag moves and snap commits from the gesture machine — `visibleHeightPx` matches `.sheet-slide` during drag |
+| **`.sheet-slide` DOM** (`getBoundingClientRect`, `ResizeObserver`) | CSS height transitions (settle animation) and any sub-frame samples between machine commits |
+| **`useSheetMetricsContext().visibleHeightPx`** | At-rest React state only — **stale during drag** (machine skips render every pointer frame) |
+
+During drag, height is written directly to `.sheet-slide`; React context metrics may lag. Prefer `onLayoutFrameChange` or DOM reads — not metrics alone — for live padding sync.
+
+```tsx
+<Sheet
+  onLayoutFrameChange={({ visibleHeightPx, phase, restingSnap }) => {
+    syncMapPaddingBottom(visibleHeightPx);
+  }}
+>
+```
+
+`@siegetag/sheet-map` uses host canvas geometry plus live sheet DOM for viewport sync; this callback is an optional machine-authoritative alternative to polling during drag.
 
 ## Configuration
 
@@ -122,6 +146,8 @@ Chrome surface always uses `sheet` intent.
 |------|---------|-------------|
 | `halfSnapFraction` | `0.5` | Fraction snap between collapsed and full |
 | `sheetStyle` / `sheetHandleStyle` | — | CSS overrides (prefer theme CSS on `.sheet-slide`) |
+| `onSnapSettled` | — | After CSS height transition completes at a snap |
+| `onLayoutFrameChange` | — | Machine-committed layout frame — see [Live layout](#live-layout-for-map--overlay-integrators) |
 
 `SheetLayout` accepts optional `bottomReserve` (CSS height). The reserve is measured for collapsed snap height and applied as **scroll padding** on the body inner wrapper so list content can scroll behind floating app chrome (tab bar). It is not a scroll clip region. Pair with `bodyInnerStyle.paddingBottom` for an extra float gap above that chrome (`calc(reserve + gap)`).
 
