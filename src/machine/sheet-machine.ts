@@ -221,9 +221,27 @@ function reduceMeasure(
   };
   const nextState = { ...state, ...measuredHeights };
 
-  if (state.phase === "dragging" || state.phase === "settling") {
+  if (state.phase === "dragging") {
     return {
       state: nextState,
+      effects: [],
+    };
+  }
+
+  if (state.phase === "settling") {
+    return {
+      state: {
+        ...nextState,
+        visibleHeightPx: clampHeight(
+          nextState,
+          heightForSnap(
+            state.restingSnap,
+            event.collapsedHeightPx,
+            event.halfHeightPx,
+            event.fullHeightPx,
+          ),
+        ),
+      },
       effects: [],
     };
   }

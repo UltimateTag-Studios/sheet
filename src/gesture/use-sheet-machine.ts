@@ -106,12 +106,7 @@ export function useSheetMachine({
       applyEffects(result.effects, callbacksRef.current);
       stateRef.current = result.state;
       onResultRef.current?.(event, result);
-
-      const skipRender =
-        event.type === "pointerMove" && result.state.phase === "dragging";
-      if (!skipRender) {
-        setState(result.state);
-      }
+      setState(result.state);
 
       return result;
     },

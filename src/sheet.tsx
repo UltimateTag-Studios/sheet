@@ -18,7 +18,6 @@ import type { SheetLayoutFrameChange } from "./layout/sheet-layout-frame-change"
 import { toSheetLayoutFrameChange } from "./layout/sheet-layout-frame-change";
 import { readVisibleSheetHeightPx } from "./layout/snap-heights";
 import type { SheetSnap } from "./layout/snap-math";
-import { syncSheetDomFrame } from "./layout/sync-sheet-dom-frame";
 import type { SheetSnapHeights } from "./layout/use-snap-heights";
 import type { SheetMachineState } from "./machine/sheet-machine";
 
@@ -103,19 +102,8 @@ export function Sheet({
     [],
   );
 
-  const applyDragFrame = useCallback(
-    (machineState: SheetMachineState) => {
-      syncSheetDomFrame({
-        machineState,
-        sheetRoot: sheetRootRef.current,
-        sheetSlide: sheetSlideRef.current,
-        bodyRoot: bodyRootRef.current,
-        canBodyScrollRef,
-      });
-      emitLayoutFrameChange(machineState);
-    },
-    [emitLayoutFrameChange],
-  );
+  const emitLayoutFrameChangeRef = useRef(emitLayoutFrameChange);
+  emitLayoutFrameChangeRef.current = emitLayoutFrameChange;
 
   const { state, isReady, dispatch } = useSheetMachine({
     restingSnap,
@@ -124,7 +112,7 @@ export function Sheet({
     onDragInteractionChange,
     onResult: (event, result) => {
       if (event.type === "pointerMove" && result.state.phase === "dragging") {
-        applyDragFrame(result.state);
+        emitLayoutFrameChangeRef.current(result.state);
       }
     },
   });
@@ -210,14 +198,14 @@ export function Sheet({
   const [canBodyScrollEnabled, setCanBodyScrollEnabled] = useState(false);
 
   useEffect(() => {
-    if (!state || state.phase === "dragging") {
+    if (!state) {
       return;
     }
     const next = canBodyScroll({
       sheetSnap: state.restingSnap,
       visibleHeightPx: state.visibleHeightPx,
       fullHeightPx: state.fullHeightPx,
-      isDragging: false,
+      isDragging: state.phase === "dragging",
     });
     canBodyScrollRef.current = next;
     setCanBodyScrollEnabled((current) => (current === next ? current : next));

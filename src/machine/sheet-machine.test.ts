@@ -376,7 +376,7 @@ describe("reduceSheetMachine", () => {
     });
   });
 
-  it("stores measured heights during settling without interrupting animation", () => {
+  it("updates settling target height when measured snap heights change", () => {
     const initial = createInitialSheetMachineState({
       restingSnap: "collapsed",
       collapsedHeightPx: 150,
@@ -396,7 +396,7 @@ describe("reduceSheetMachine", () => {
       fullHeightPx: 700,
     });
 
-    expect(measured.state.visibleHeightPx).toBe(150);
+    expect(measured.state.visibleHeightPx).toBe(210);
     expect(measured.state.collapsedHeightPx).toBe(210);
 
     const settled = reduceSheetMachine(measured.state, {

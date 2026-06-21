@@ -512,6 +512,35 @@ describe("Sheet gesture integration", () => {
     expect(screen.getByTestId("snap").textContent).not.toBe("full");
   });
 
+  it("snaps chrome back to collapsed after a small handle drag", () => {
+    renderWithHost(
+      <Sheet snap="collapsed">
+        <SheetLayout
+          header={<div data-testid="sheet-header">Header title</div>}
+          body={<div>Body</div>}
+          bottomReserve="80px"
+        />
+      </Sheet>,
+    );
+
+    const initialHeight = slideHeightPx();
+    const chrome = document.querySelector("[data-sheet-chrome]");
+    if (!chrome) {
+      throw new Error("Expected sheet chrome");
+    }
+
+    pointerDown(chrome, 13, 400);
+    pointerMove(13, 380);
+    expect(slideHeightPx()).toBeGreaterThan(initialHeight);
+
+    pointerUp(13, 380);
+
+    expect(slideHeightPx()).toBe(initialHeight);
+    expect(
+      document.querySelector(".sheet")?.getAttribute("data-sheet-phase"),
+    ).toBe("settling");
+  });
+
   it("emits onLayoutFrameChange during chrome drag with live visibleHeightPx", () => {
     const onLayoutFrameChange = vi.fn();
 

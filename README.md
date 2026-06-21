@@ -126,9 +126,9 @@ Consumers that align external UI with the sheet (map padding, visible-area overl
 |--------|-------------|
 | **`onLayoutFrameChange`** | Drag moves and snap commits from the gesture machine — `visibleHeightPx` matches `.sheet-slide` during drag |
 | **`.sheet-slide` DOM** (`getBoundingClientRect`, `ResizeObserver`) | CSS height transitions (settle animation) and any sub-frame samples between machine commits |
-| **`useSheetMetricsContext().visibleHeightPx`** | At-rest React state only — **stale during drag** (machine skips render every pointer frame) |
+| **`useSheetMetricsContext().visibleHeightPx`** | Same as machine state — updated every pointer frame during drag |
 
-During drag, height is written directly to `.sheet-slide`; React context metrics may lag. Prefer `onLayoutFrameChange` or DOM reads — not metrics alone — for live padding sync.
+During drag, height is driven by React (`frameStyle` on `.sheet-slide`). Prefer `onLayoutFrameChange` or DOM reads for sub-frame samples during CSS height transitions.
 
 ```tsx
 <Sheet
