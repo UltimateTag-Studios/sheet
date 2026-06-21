@@ -11,6 +11,7 @@ export type UseSheetMeasureOptions = {
   halfSnapFraction: number;
   onSnapHeightsChange?: (heights: {
     collapsedHeightPx: number;
+    halfHeightPx: number;
     fullHeightPx: number;
   }) => void;
   onLayoutMeasureRef: RefObject<
@@ -41,8 +42,12 @@ export function useSheetMeasure({
     });
 
   useEffect(() => {
-    onSnapHeightsChangeRef.current?.({ collapsedHeightPx, fullHeightPx });
-  }, [collapsedHeightPx, fullHeightPx]);
+    onSnapHeightsChangeRef.current?.({
+      collapsedHeightPx,
+      halfHeightPx,
+      fullHeightPx,
+    });
+  }, [collapsedHeightPx, halfHeightPx, fullHeightPx]);
 
   const registerChromeMeasure = useCallback((node: HTMLElement | null) => {
     chromeRef.current = node;

@@ -36,11 +36,14 @@ export type SheetProps = {
   sheetStyle?: CSSProperties;
   /** Optional handle visual overrides. */
   sheetHandleStyle?: CSSProperties;
-  /** Called when measured collapsed/full snap heights change. */
+  /** Called when measured snap heights change. */
   onSnapHeightsChange?: (heights: {
     collapsedHeightPx: number;
+    halfHeightPx: number;
     fullHeightPx: number;
   }) => void;
+  /** Fires after the sheet CSS height transition completes at a snap. */
+  onSnapSettled?: (snap: SheetSnap) => void;
 };
 
 export function Sheet({
@@ -53,6 +56,7 @@ export function Sheet({
   sheetStyle,
   sheetHandleStyle,
   onSnapHeightsChange,
+  onSnapSettled,
 }: SheetProps) {
   const hostEl = useSheetHostEl();
   const resolvedHalfSnap = normalizeHalfSnapFraction(halfSnapFraction);
@@ -149,6 +153,12 @@ export function Sheet({
     scrollMomentum,
   );
 
+  const onSnapSettledRef = useRef(onSnapSettled);
+  onSnapSettledRef.current = onSnapSettled;
+
+  const stateRefForSettle = useRef(state);
+  stateRefForSettle.current = state;
+
   const { frameStyle, onTransitionEnd } = useSheetSlideFrame({
     visibleHeightPx: state?.visibleHeightPx ?? 0,
     phase: state?.phase ?? "idle",
@@ -156,6 +166,10 @@ export function Sheet({
     enabled: isReady,
     onSettleComplete: () => {
       dispatch({ type: "settleComplete" });
+      const snap = stateRefForSettle.current?.restingSnap;
+      if (snap) {
+        onSnapSettledRef.current?.(snap);
+      }
     },
   });
 
