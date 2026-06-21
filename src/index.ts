@@ -4,8 +4,8 @@ export {
   useSheetControlsContext,
   useSheetMetricsContext,
 } from "./context/sheet-context";
-export type { TouchClickActivationHandlers } from "./gesture/use-touch-click-activation";
-export { useTouchClickActivation } from "./gesture/use-touch-click-activation";
+export type { SheetHostProps } from "./context/sheet-host-context";
+export { SheetHost, useSheetHostEl } from "./context/sheet-host-context";
 export { isSheetAtCollapsedHeader } from "./layout/collapsed-header-state";
 export { normalizeHalfSnapFraction } from "./layout/normalize-half-snap-fraction";
 export type {
@@ -25,10 +25,9 @@ export {
   FALLBACK_FULL_HEIGHT_PX,
   measureChromeHeightPx,
   measureCollapsedHeightPx,
-  readFullHeightPx,
+  readHostHeightPx,
   readVisibleSheetHeightPx,
 } from "./layout/snap-heights";
-export { SHEET_AXIS_THRESHOLD_PX } from "./machine/sheet-machine";
 export type { SheetProps, SheetSnap } from "./sheet";
 export {
   DEFAULT_HALF_SNAP_FRACTION,

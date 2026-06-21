@@ -38,8 +38,10 @@ Override semantic classes in your app CSS (see [Theming](#theming)).
 
 ## Quick start
 
+`Sheet` must render inside a sized `SheetHost`. The app positions the host (map frame, inset region, etc.); snap heights measure from the host's `clientHeight`.
+
 ```tsx
-import { Sheet, SheetLayout, type SheetSnap } from "@siegetag/sheet";
+import { Sheet, SheetHost, SheetLayout, type SheetSnap } from "@siegetag/sheet";
 import "@siegetag/sheet/styles.css";
 import { useState } from "react";
 
@@ -47,12 +49,16 @@ function Demo() {
   const [snap, setSnap] = useState<SheetSnap>("half");
 
   return (
-    <Sheet snap={snap} onSnapChange={setSnap}>
-      <SheetLayout
-        header={<header>Title</header>}
-        body={<main>Scrollable body at full height</main>}
-      />
-    </Sheet>
+    <div className="app-map-frame">
+      <SheetHost className="sheet-host">
+        <Sheet snap={snap} onSnapChange={setSnap}>
+          <SheetLayout
+            header={<header>Title</header>}
+            body={<main>Scrollable body at full height</main>}
+          />
+        </Sheet>
+      </SheetHost>
+    </div>
   );
 }
 ```
@@ -72,18 +78,15 @@ One pointer gesture can move through multiple modes without releasing:
 
 Body scroll is driven programmatically while the pointer is captured. On release, a fast fling continues with decaying momentum (same direction as the drag). A new pointer down or snap change cancels momentum. When the sheet settles to a new snap, body scroll resets to the top.
 
-Body pointer routing uses **capture** on the scroll root so drags can start on buttons and cards. Below move slop, taps activate controls normally; once slop is exceeded, the gesture commits and the control click is suppressed.
-
-### Move slop
-
-Tap-vs-drag disambiguation uses `SHEET_AXIS_THRESHOLD_PX` in [`sheet-machine.ts`](src/machine/sheet-machine.ts) (default **8** px). Body pointers stay armed in `idle` until vertical movement exceeds that threshold; chrome drags start immediately. Re-exported from the package as `SHEET_AXIS_THRESHOLD_PX` — there is no `Sheet` prop for this yet; change the constant (or export) if you need a different feel.
+Body pointer routing uses **capture** on the scroll root so drags can start on buttons and cards. Below move slop (8px), taps activate controls normally; once slop is exceeded, the gesture commits and the control click is suppressed.
 
 Do **not** add `overflow-y-auto` to body content — the shell owns scroll on the body root (`data-sheet-scroll-root`).
 
 ## Architecture
 
 ```
-Sheet                          ← snap props, transform, gesture wiring
+SheetHost                      ← sized region; snap heights measure from here
+Sheet                          ← snap props, height animation, gesture wiring
 ├── sheet-machine              ← pure reducer (sheet / scroll / pendingAxis intents)
 ├── use-sheet-pointer-handlers ← capture + apply scroll deltas
 ├── use-sheet-body-scroll      ← body el ref, scrollTop tracking, reset on snap
@@ -94,7 +97,7 @@ Sheet                          ← snap props, transform, gesture wiring
 
 - `sheet` — adjust visible height
 - `scroll` — apply vertical scroll delta to body root
-- `pendingAxis` — at full + scroll top, wait until move slop to pick scroll up vs sheet down
+- `pendingAxis` — at full + scroll top, wait 8px to pick scroll up vs sheet down
 
 Chrome surface always uses `sheet` intent.
 
@@ -102,6 +105,7 @@ Chrome surface always uses `sheet` intent.
 
 | Export | Role |
 |--------|------|
+| `SheetHost` | Sized container — required parent for `Sheet` |
 | `Sheet` | Root sheet + context provider |
 | `SheetLayout` | Default chrome/body structure |
 | `useSheetContext` | Live snap, heights, drag phase (custom layouts) |
@@ -110,21 +114,20 @@ Chrome surface always uses `sheet` intent.
 | `useCanBodyScroll` | Whether body root should use scroll vs drag overflow |
 | `isSheetAtCollapsedHeader` | Whether sheet is at collapsed header height (divider hide) |
 | `buildSheetStyle` / `buildSheetLayoutVars` | Handle geometry tokens |
-| `getVisibleSheetHeightPx` | Measure visible sheet height in viewport |
+| `getVisibleSheetHeightPx` | Measure visible sheet slide height |
 
 ## Configuration
 
 | Prop | Default | Description |
 |------|---------|-------------|
 | `halfSnapFraction` | `0.5` | Fraction snap between collapsed and full |
-| `collapsedBottomInsetPx` | `0` | Extra collapsed height without DOM |
 | `sheetStyle` / `sheetHandleStyle` | — | CSS overrides (prefer theme CSS on `.sheet-slide`) |
 
-`SheetLayout` accepts optional `bottomReserve` (CSS height for `.sheet-bottom-reserve` spacer). The shell reads its laid-out px height once per mount/resize (no `ResizeObserver` on the spacer — the value is your CSS length, resolved at layout time). Collapsed snap height = chrome + that px; pair with `bodyInnerStyle.paddingBottom` for scroll-end float gap above app chrome.
+`SheetLayout` accepts optional `bottomReserve` (CSS height). The reserve is measured for collapsed snap height and applied as **scroll padding** on the body inner wrapper so list content can scroll behind floating app chrome (tab bar). It is not a scroll clip region. Pair with `bodyInnerStyle.paddingBottom` for an extra float gap above that chrome (`calc(reserve + gap)`).
 
-During drag, transform updates write directly to `.sheet-slide` so React does not re-render every pointer frame. Context is split: **controls** (handlers, registrars) vs **metrics** (snap, heights).
+During drag, height updates write directly to `.sheet-slide` so React does not re-render every pointer frame. Context is split: **controls** (handlers, registrars) vs **metrics** (snap, heights).
 
-The sheet root is `position: fixed` with **no `z-index`**. Translate animation runs on **`.sheet-slide`** so the fixed root does not create a transform stacking context that jumps above later DOM siblings (tab bars, etc.). Stack order: render the map shell first, then app chrome that must sit on top.
+The sheet fills the host with `position: absolute` and **no `z-index`**. Height animation runs on **`.sheet-slide`** (bottom-anchored, explicit height). Stack order: render the map shell first, then app chrome that must sit on top.
 
 ## Theming
 
@@ -132,14 +135,15 @@ Override semantic classes from `@siegetag/sheet/styles.css`:
 
 | Class | Purpose |
 |-------|---------|
-| `.sheet` | Fixed viewport anchor (no surface styling — do not set `z-index`) |
-| `.sheet-slide` | Translated surface (background, border, shadow) |
+| `.sheet-host` | Sized region the app positions |
+| `.sheet` | Absolute fill inside host (no surface styling — do not set `z-index`) |
+| `.sheet-slide` | Bottom-anchored surface (background, border, shadow; height set inline) |
 | `.sheet-handle` | Drag pill |
 | `.sheet-header` | Optional header content area |
 | `.sheet-header-interactive` | Opt-in: header controls receive pointer events (chrome drag surface disables them by default) |
 | `.sheet-body-interactive` | Opt-in: non-native click targets get `touch-action: manipulation` inside the body scroll root |
 | `.sheet-divider` | Line between chrome and body (hidden at collapsed header via `data-sheet-collapsed-header`) |
-| `.sheet-bottom-reserve` | Fixed-height spacer for bottom chrome clearance (always in DOM when configured) |
+| `.sheet-bottom-reserve` | Hidden measurement node for reserve height (collapsed snap); body scroll uses the same length as padding |
 | `.sheet-body-root--scroll` | Body at full height (overflow scroll) |
 | `.sheet-body-root--drag` | Body below full height (overflow hidden) |
 | `.sheet[data-sheet-collapsed-header] .sheet-body-root` | Body hidden at collapsed header snap |
@@ -160,7 +164,7 @@ pnpm --filter @siegetag/sheet build:styles
 pnpm dev:sheet-demo
 ```
 
-Opens [`apps/sheet-demo`](../../apps/sheet-demo) with screens for minimal content, long scroll, handle-only, and tab-bar reserve padding.
+Opens [`apps/sheet-demo`](../../apps/sheet-demo) with screens for minimal content, long scroll, handle-only, tab-bar reserve, and inset host positioning.
 
 ## Tests
 
@@ -168,26 +172,7 @@ Opens [`apps/sheet-demo`](../../apps/sheet-demo) with screens for minimal conten
 pnpm --filter @siegetag/sheet test
 ```
 
-Unit tests cover the gesture reducer, snap math, scroll mode, and integration tests cover chrome drag, scroll handoffs, and snap settle behavior.
-
-## Touch controls after sheet drag
-
-On Android, the browser often **does not fire `click`** for taps immediately after a sheet drag (or when `pointerdown` / `pointerup` hit different elements). Sheet body buttons use document-level pointer routing plus `activateSheetClickTarget`; standalone controls should use **`useTouchClickActivation`**.
-
-```tsx
-import { useTouchClickActivation } from "@siegetag/sheet";
-
-function MyControl({ onPress }: { onPress: () => void }) {
-  const touch = useTouchClickActivation(onPress);
-  return <button type="button" {...touch}>Action</button>;
-}
-```
-
-- **Touch:** `pointerup` runs `onPress` on the next frame.
-- **Mouse / pen:** normal `click`.
-- Spread handlers on the **interactive element**, not a wrapper with `pointer-events: auto`.
-
-Inside the sheet body scroll root, keep using **`sheet-body-interactive`** and the sheet gesture path instead of this hook alone.
+Unit tests cover the gesture reducer, snap math, scroll mode, and integration tests cover chrome drag, scroll handoffs, and snap settle behavior inside `SheetHost`.
 
 ## License
 

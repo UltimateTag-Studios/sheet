@@ -9,6 +9,7 @@ import {
 } from "react";
 
 import { SheetContextProvider } from "./context/sheet-context";
+import { useSheetHostEl } from "./context/sheet-host-context";
 import { useSheetMachine } from "./gesture/use-sheet-machine";
 import { useSheetPointerHandlers } from "./gesture/use-sheet-pointer-handlers";
 import { useSheetBodyScroll } from "./hooks/use-sheet-body-scroll";
@@ -18,7 +19,7 @@ import {
   normalizeHalfSnapFraction,
 } from "./layout/normalize-half-snap-fraction";
 import { canBodyScroll, sheetBodyRootClass } from "./layout/scroll-mode";
-import { sheetTransformStyle } from "./layout/sheet-transform";
+import { sheetFrameStyle } from "./layout/sheet-transform";
 import { readVisibleSheetHeightPx } from "./layout/snap-heights";
 import type { SheetSnap } from "./layout/snap-math";
 import { useSheetSnapHeights } from "./layout/use-snap-heights";
@@ -34,8 +35,6 @@ export type SheetProps = {
   onSnapChange?: (snap: SheetSnap) => void;
   /** Fires when the user starts or stops dragging (e.g. defer map camera updates). */
   onDragInteractionChange?: (isDragging: boolean) => void;
-  /** Extra pixels below measured header chrome for collapsed snap (e.g. floating tab bar). */
-  collapsedBottomInsetPx?: number;
   /** Fraction snap between collapsed and full (default 0.5). */
   halfSnapFraction?: number;
   /** Merged layout vars + optional sheet surface visual overrides. */
@@ -49,6 +48,16 @@ export type SheetProps = {
   }) => void;
 };
 
+function applySheetSlideFrame(
+  sheetSlide: HTMLDivElement,
+  visibleHeightPx: number,
+  phase: "idle" | "dragging" | "settling",
+): void {
+  const frameStyle = sheetFrameStyle(visibleHeightPx, phase);
+  sheetSlide.style.height = frameStyle.height;
+  sheetSlide.style.transition = frameStyle.transition;
+}
+
 function syncSheetDomFrame(args: {
   machineState: SheetMachineState;
   sheetRoot: HTMLDivElement | null;
@@ -59,12 +68,7 @@ function syncSheetDomFrame(args: {
   const { machineState, sheetRoot, sheetSlide, bodyRoot } = args;
 
   if (sheetSlide) {
-    const frameStyle = sheetTransformStyle(
-      machineState.visibleHeightPx,
-      "dragging",
-    );
-    sheetSlide.style.transform = frameStyle.transform ?? "";
-    sheetSlide.style.transition = frameStyle.transition ?? "";
+    applySheetSlideFrame(sheetSlide, machineState.visibleHeightPx, "dragging");
   }
 
   if (sheetRoot) {
@@ -102,12 +106,12 @@ export function Sheet({
   defaultSnap = "half",
   onSnapChange,
   onDragInteractionChange,
-  collapsedBottomInsetPx = 0,
   halfSnapFraction,
   sheetStyle,
   sheetHandleStyle,
   onSnapHeightsChange,
 }: SheetProps) {
+  const hostEl = useSheetHostEl();
   const resolvedHalfSnap = normalizeHalfSnapFraction(halfSnapFraction);
 
   const onSnapHeightsChangeRef = useRef(onSnapHeightsChange);
@@ -123,9 +127,9 @@ export function Sheet({
 
   const { collapsedHeightPx, halfHeightPx, fullHeightPx } = useSheetSnapHeights(
     {
+      hostEl,
       chromeEl,
       reserveHeightPx,
-      collapsedBottomInsetPx,
       halfSnapFraction: resolvedHalfSnap,
     },
   );
@@ -237,8 +241,8 @@ export function Sheet({
     scrollMomentum,
   );
 
-  const transformStyle = useMemo(
-    () => sheetTransformStyle(state.visibleHeightPx, state.phase),
+  const frameStyle = useMemo(
+    () => sheetFrameStyle(state.visibleHeightPx, state.phase),
     [state.phase, state.visibleHeightPx],
   );
 
@@ -250,16 +254,15 @@ export function Sheet({
     if (!slide) {
       return;
     }
-    slide.style.transform = transformStyle.transform ?? "";
-    slide.style.transition = transformStyle.transition ?? "";
-  }, [state.phase, transformStyle]);
+    applySheetSlideFrame(slide, state.visibleHeightPx, state.phase);
+  }, [state.phase, state.visibleHeightPx]);
 
   const onTransitionEnd = useCallback(
     (event: TransitionEvent<HTMLDivElement>) => {
       if (event.target !== event.currentTarget) {
         return;
       }
-      if (event.propertyName !== "transform") {
+      if (event.propertyName !== "height") {
         return;
       }
       if (state.phase === "settling") {
@@ -312,11 +315,14 @@ export function Sheet({
     ],
   );
 
+  if (!hostEl) {
+    return null;
+  }
+
   return (
     <div
       ref={sheetRootRef}
       className="sheet"
-      style={{ bottom: "0px" }}
       data-sheet-phase={state.phase}
       data-sheet-collapsed-header={atCollapsedHeader ? "" : undefined}
     >
@@ -325,7 +331,7 @@ export function Sheet({
         className="sheet-slide"
         style={{
           ...sheetStyle,
-          ...transformStyle,
+          ...frameStyle,
         }}
         onTransitionEnd={onTransitionEnd}
       >

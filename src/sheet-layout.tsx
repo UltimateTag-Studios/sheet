@@ -7,6 +7,7 @@ import {
   useCanBodyScroll,
   useSheetControlsContext,
 } from "./context/sheet-context";
+import { mergeBodyInnerScrollStyle } from "./layout/merge-body-inner-scroll-style";
 import { sheetBodyRootClass } from "./layout/scroll-mode";
 
 export type SheetLayoutProps = {
@@ -58,6 +59,11 @@ export function SheetLayout({
     };
   }, [bottomReserve, syncReserveHeightPx]);
 
+  const bodyInnerScrollStyle = mergeBodyInnerScrollStyle(
+    bottomReserve,
+    bodyInnerStyle,
+  );
+
   return (
     <div className="sheet-layers">
       <SheetChrome
@@ -78,9 +84,9 @@ export function SheetLayout({
         ref={registerBodyEl}
         className={sheetBodyRootClass(canBodyScroll)}
         data-sheet-scroll-root
-        onPointerDown={pointerHandlers.onBodyPointerDown}
+        onPointerDownCapture={pointerHandlers.onBodyPointerDown}
       >
-        <div style={bodyInnerStyle}>{body}</div>
+        <div style={bodyInnerScrollStyle}>{body}</div>
       </div>
       {bottomReserve ? (
         <div

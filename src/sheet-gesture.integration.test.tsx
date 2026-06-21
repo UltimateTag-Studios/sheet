@@ -7,11 +7,39 @@ import {
   render,
   screen,
 } from "@testing-library/react";
-import { useState } from "react";
+import { type ReactElement, useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { SheetHost } from "./context/sheet-host-context";
 import { Sheet, type SheetSnap } from "./sheet";
 import { SheetLayout } from "./sheet-layout";
+
+const DEFAULT_HOST_HEIGHT = 800;
+
+function stubHostHeight(host: Element, heightPx: number) {
+  Object.defineProperty(host, "clientHeight", {
+    configurable: true,
+    value: heightPx,
+  });
+  act(() => {
+    window.dispatchEvent(new Event("resize"));
+  });
+}
+
+function renderWithHost(ui: ReactElement, hostHeight = DEFAULT_HOST_HEIGHT) {
+  render(
+    <SheetHost
+      className="sheet-host"
+      style={{ height: `${hostHeight}px`, width: "100%" }}
+    >
+      {ui}
+    </SheetHost>,
+  );
+  const host = document.querySelector(".sheet-host");
+  if (host) {
+    stubHostHeight(host, hostHeight);
+  }
+}
 
 function TestSheet() {
   const [snap, setSnap] = useState<SheetSnap>("half");
@@ -94,6 +122,41 @@ function TestHalfSheetWithBodyButton() {
   );
 }
 
+function TestCollapsedSheet() {
+  const [snap, setSnap] = useState<SheetSnap>("collapsed");
+
+  return (
+    <>
+      <div data-testid="snap">{snap}</div>
+      <Sheet snap={snap} onSnapChange={setSnap}>
+        <SheetLayout
+          header={<div data-testid="sheet-header">Header title</div>}
+          body={<div>Body</div>}
+        />
+      </Sheet>
+    </>
+  );
+}
+
+function TestFullSheetWithBottomReserve() {
+  const [snap, setSnap] = useState<SheetSnap>("full");
+
+  return (
+    <Sheet snap={snap} onSnapChange={setSnap}>
+      <SheetLayout
+        header={<div data-testid="sheet-header">Header title</div>}
+        body={
+          <div data-testid="tall-body" style={{ height: "2000px" }}>
+            Body
+          </div>
+        }
+        bottomReserve="80px"
+        bodyInnerStyle={{ paddingBottom: "16px" }}
+      />
+    </Sheet>
+  );
+}
+
 function stubScrollRootDimensions(
   scrollRoot: HTMLDivElement,
   clientHeight: number,
@@ -109,18 +172,12 @@ function stubScrollRootDimensions(
   });
 }
 
-function pointerDown(
-  surface: Element,
-  pointerId: number,
-  clientY: number,
-  pointerType = "mouse",
-) {
+function pointerDown(surface: Element, pointerId: number, clientY: number) {
   act(() => {
     fireEvent.pointerDown(surface, {
       pointerId,
       clientY,
       button: 0,
-      pointerType,
     });
   });
 }
@@ -137,13 +194,12 @@ function pointerMove(pointerId: number, clientY: number) {
   });
 }
 
-function pointerUp(pointerId: number, clientY: number, pointerType = "mouse") {
+function pointerUp(pointerId: number, clientY: number) {
   act(() => {
     document.dispatchEvent(
       new PointerEvent("pointerup", {
         pointerId,
         clientY,
-        pointerType,
         bubbles: true,
       }),
     );
@@ -161,19 +217,33 @@ function dragSurface(
   pointerUp(pointerId, endY);
 }
 
+function slideHeightPx(): number {
+  const slide = document.querySelector<HTMLElement>(".sheet-slide");
+  return Number.parseInt(slide?.style.height ?? "0", 10);
+}
+
 describe("Sheet gesture integration", () => {
   afterEach(() => {
     cleanup();
   });
 
-  it("drags the chrome unit (handle, header, divider) toward full", () => {
-    Object.defineProperty(window, "innerHeight", {
-      configurable: true,
-      value: 800,
-      writable: true,
-    });
-
+  it("renders nothing without SheetHost", () => {
     render(<TestSheet />);
+    expect(document.querySelector(".sheet")).toBeNull();
+  });
+
+  it("shows header chrome at collapsed snap with bottom-anchored height", () => {
+    renderWithHost(<TestCollapsedSheet />);
+
+    const slide = document.querySelector<HTMLElement>(".sheet-slide");
+    const header = screen.getByTestId("sheet-header");
+    expect(slide?.style.height).not.toBe("");
+    expect(slideHeightPx()).toBeGreaterThan(80);
+    expect(header).toBeTruthy();
+  });
+
+  it("drags the chrome unit (handle, header, divider) toward full", () => {
+    renderWithHost(<TestSheet />);
 
     const chrome = document.querySelector("[data-sheet-chrome]");
     if (!chrome) {
@@ -184,18 +254,12 @@ describe("Sheet gesture integration", () => {
 
     expect(screen.getByTestId("snap").textContent).toBe("full");
     expect(
-      document.querySelector<HTMLElement>(".sheet-slide")?.style.transform,
-    ).toBe("translate3d(0, 0px, 0)");
+      document.querySelector<HTMLElement>(".sheet-slide")?.style.height,
+    ).toBe(`${DEFAULT_HOST_HEIGHT}px`);
   });
 
   it("drags chrome from full when body is scrolled and resets scroll on snap change", () => {
-    Object.defineProperty(window, "innerHeight", {
-      configurable: true,
-      value: 800,
-      writable: true,
-    });
-
-    render(<TestFullSheetWithScroll />);
+    renderWithHost(<TestFullSheetWithScroll />);
 
     const scrollRoot = document.querySelector("[data-sheet-scroll-root]");
     if (!(scrollRoot instanceof HTMLDivElement)) {
@@ -219,13 +283,7 @@ describe("Sheet gesture integration", () => {
   });
 
   it("transitions from half sheet drag to body scroll at full height", () => {
-    Object.defineProperty(window, "innerHeight", {
-      configurable: true,
-      value: 800,
-      writable: true,
-    });
-
-    render(<TestHalfSheetWithScroll />);
+    renderWithHost(<TestHalfSheetWithScroll />);
 
     const body = document.querySelector("[data-sheet-scroll-root]");
     if (!(body instanceof HTMLDivElement)) {
@@ -242,13 +300,7 @@ describe("Sheet gesture integration", () => {
   });
 
   it("collapses from full when body scroll reaches top during one drag", () => {
-    Object.defineProperty(window, "innerHeight", {
-      configurable: true,
-      value: 800,
-      writable: true,
-    });
-
-    render(<TestFullSheetWithScroll />);
+    renderWithHost(<TestFullSheetWithScroll />);
 
     const body = document.querySelector("[data-sheet-scroll-root]");
     if (!(body instanceof HTMLDivElement)) {
@@ -270,24 +322,11 @@ describe("Sheet gesture integration", () => {
     expect(
       document.querySelector(".sheet")?.getAttribute("data-sheet-phase"),
     ).toBe("dragging");
-    const sheetEl = document.querySelector<HTMLElement>(".sheet-slide");
-    expect(
-      Number.parseInt(
-        sheetEl?.style.transform.match(/translate3d\(0, (\d+)px, 0\)/)?.[1] ??
-          "0",
-        10,
-      ),
-    ).toBeGreaterThan(0);
+    expect(slideHeightPx()).toBeLessThan(DEFAULT_HOST_HEIGHT);
   });
 
   it("collapses from full at scroll top without snapping back on release", () => {
-    Object.defineProperty(window, "innerHeight", {
-      configurable: true,
-      value: 800,
-      writable: true,
-    });
-
-    render(<TestFullSheetWithScroll />);
+    renderWithHost(<TestFullSheetWithScroll />);
 
     const body = document.querySelector("[data-sheet-scroll-root]");
     if (!(body instanceof HTMLDivElement)) {
@@ -306,13 +345,7 @@ describe("Sheet gesture integration", () => {
   it("continues body scroll momentum after a fast fling release", async () => {
     vi.useFakeTimers({ toFake: ["performance", "requestAnimationFrame"] });
 
-    Object.defineProperty(window, "innerHeight", {
-      configurable: true,
-      value: 800,
-      writable: true,
-    });
-
-    render(<TestFullSheetWithScroll />);
+    renderWithHost(<TestFullSheetWithScroll />);
 
     const body = document.querySelector("[data-sheet-scroll-root]");
     if (!(body instanceof HTMLDivElement)) {
@@ -346,13 +379,7 @@ describe("Sheet gesture integration", () => {
   });
 
   it("activates a body button on the first tap at half snap", () => {
-    Object.defineProperty(window, "innerHeight", {
-      configurable: true,
-      value: 800,
-      writable: true,
-    });
-
-    render(<TestHalfSheetWithBodyButton />);
+    renderWithHost(<TestHalfSheetWithBodyButton />);
 
     const button = screen.getByTestId("body-action");
     pointerDown(button, 7, 400);
@@ -369,13 +396,7 @@ describe("Sheet gesture integration", () => {
   });
 
   it("drags the sheet from a body button after move slop without activating it", () => {
-    Object.defineProperty(window, "innerHeight", {
-      configurable: true,
-      value: 800,
-      writable: true,
-    });
-
-    render(<TestHalfSheetWithBodyButton />);
+    renderWithHost(<TestHalfSheetWithBodyButton />);
 
     const button = screen.getByTestId("body-action");
     const body = document.querySelector("[data-sheet-scroll-root]");
@@ -386,7 +407,7 @@ describe("Sheet gesture integration", () => {
     if (!slide) {
       throw new Error("Expected sheet slide");
     }
-    const initialTransform = slide.style.transform;
+    const initialHeight = slide.style.height;
 
     pointerDown(body, 8, 400);
     pointerMove(8, 600);
@@ -394,7 +415,7 @@ describe("Sheet gesture integration", () => {
     expect(
       document.querySelector(".sheet")?.getAttribute("data-sheet-phase"),
     ).toBe("dragging");
-    expect(slide.style.transform).not.toBe(initialTransform);
+    expect(slide.style.height).not.toBe(initialHeight);
 
     pointerUp(8, 600);
 
@@ -410,37 +431,8 @@ describe("Sheet gesture integration", () => {
     ).toBe("dragging");
   });
 
-  it("activates a body button on the first touch tap at half snap", () => {
-    vi.useFakeTimers();
-
-    Object.defineProperty(window, "innerHeight", {
-      configurable: true,
-      value: 800,
-      writable: true,
-    });
-
-    render(<TestHalfSheetWithBodyButton />);
-
-    const button = screen.getByTestId("body-action");
-    pointerDown(button, 10, 400, "touch");
-    pointerUp(10, 400, "touch");
-
-    act(() => {
-      vi.runAllTimers();
-    });
-
-    expect(screen.getByTestId("selected").textContent).toBe("yes");
-    vi.useRealTimers();
-  });
-
   it("does not steal first body tap at half snap before move slop", () => {
-    Object.defineProperty(window, "innerHeight", {
-      configurable: true,
-      value: 800,
-      writable: true,
-    });
-
-    render(<TestHalfSheetWithBodyButton />);
+    renderWithHost(<TestHalfSheetWithBodyButton />);
 
     const button = screen.getByTestId("body-action");
     const body = document.querySelector("[data-sheet-scroll-root]");
@@ -468,5 +460,55 @@ describe("Sheet gesture integration", () => {
     ).toBe("idle");
 
     body.removeEventListener("pointerdown", recordDefaultPrevented);
+  });
+
+  it("scrolls body through bottom reserve with combined scroll padding", () => {
+    renderWithHost(<TestFullSheetWithBottomReserve />);
+
+    const scrollRoot = document.querySelector("[data-sheet-scroll-root]");
+    const inner = scrollRoot?.firstElementChild;
+    const reserve = document.querySelector<HTMLElement>(
+      ".sheet-bottom-reserve",
+    );
+
+    expect(scrollRoot).toBeTruthy();
+    expect(inner).toBeTruthy();
+    expect(reserve).toBeTruthy();
+
+    if (!(inner instanceof HTMLDivElement) || !reserve) {
+      throw new Error("Expected sheet layout nodes");
+    }
+
+    expect(reserve.style.height).toBe("80px");
+    expect(inner.style.paddingBottom).toBe("calc(96px)");
+  });
+
+  it("expands sheet to full host height", () => {
+    renderWithHost(<TestCollapsedSheet />);
+
+    const chrome = document.querySelector("[data-sheet-chrome]");
+    if (!chrome) {
+      throw new Error("Expected sheet chrome");
+    }
+
+    dragSurface(chrome, 10, 750, 20);
+
+    expect(screen.getByTestId("snap").textContent).toBe("full");
+    expect(
+      document.querySelector<HTMLElement>(".sheet-slide")?.style.height,
+    ).toBe(`${DEFAULT_HOST_HEIGHT}px`);
+  });
+
+  it("drags chrome from full height inside a shorter host", () => {
+    renderWithHost(<TestFullSheetWithScroll />, 640);
+
+    const chrome = document.querySelector("[data-sheet-chrome]");
+    if (!chrome) {
+      throw new Error("Expected sheet chrome");
+    }
+
+    dragSurface(chrome, 11, 200, 500);
+
+    expect(screen.getByTestId("snap").textContent).not.toBe("full");
   });
 });
