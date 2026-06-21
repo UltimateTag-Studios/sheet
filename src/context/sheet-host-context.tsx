@@ -1,10 +1,31 @@
 import type { CSSProperties, ReactNode } from "react";
-import { createContext, useCallback, useContext, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useSyncExternalStore,
+} from "react";
 
-const SheetHostContext = createContext<HTMLElement | null>(null);
+type SheetHostStore = {
+  subscribe: (onStoreChange: () => void) => () => void;
+  getSnapshot: () => HTMLElement | null;
+};
+
+const SheetHostContext = createContext<SheetHostStore | null>(null);
+
+const noopSubscribe = () => () => {};
+const serverSnapshot = (): HTMLElement | null => null;
 
 export function useSheetHostEl(): HTMLElement | null {
-  return useContext(SheetHostContext);
+  const store = useContext(SheetHostContext);
+  return useSyncExternalStore(
+    store?.subscribe ?? noopSubscribe,
+    store?.getSnapshot ?? serverSnapshot,
+    serverSnapshot,
+  );
 }
 
 export type SheetHostProps = {
@@ -15,14 +36,34 @@ export type SheetHostProps = {
 
 /** Sized container for a sheet — snap heights measure from this element. */
 export function SheetHost({ children, className, style }: SheetHostProps) {
-  const [hostEl, setHostEl] = useState<HTMLElement | null>(null);
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  const listenersRef = useRef(new Set<() => void>());
 
-  const hostRef = useCallback((node: HTMLDivElement | null) => {
-    setHostEl(node);
+  const notify = useCallback(() => {
+    for (const listener of listenersRef.current) {
+      listener();
+    }
   }, []);
 
+  const store = useMemo<SheetHostStore>(
+    () => ({
+      subscribe: (onStoreChange) => {
+        listenersRef.current.add(onStoreChange);
+        return () => {
+          listenersRef.current.delete(onStoreChange);
+        };
+      },
+      getSnapshot: () => hostRef.current,
+    }),
+    [],
+  );
+
+  useLayoutEffect(() => {
+    notify();
+  }, [notify]);
+
   return (
-    <SheetHostContext.Provider value={hostEl}>
+    <SheetHostContext.Provider value={store}>
       <div ref={hostRef} className={className} style={style}>
         {children}
       </div>

@@ -1,14 +1,18 @@
-import { useEffect, useState } from "react";
+import type { RefObject } from "react";
+import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 
 import { measureCollapsedHeightPx, readHostHeightPx } from "./snap-heights";
 
 export type UseSheetSnapHeightsOptions = {
   hostEl: HTMLElement | null;
-  chromeEl: HTMLElement | null;
-  /** Laid-out reserve spacer height in px — derived from the CSS length prop, not observed. */
-  reserveHeightPx: number;
+  chromeRef: RefObject<HTMLElement | null>;
+  getReserveHeightPx: () => number;
   /** Already normalized half snap fraction (0–1). */
   halfSnapFraction: number;
+  /** Called whenever snap heights are synced (layout + resize). */
+  onHeightsChangeRef?: RefObject<
+    ((heights: SheetSnapHeights) => void) | undefined
+  >;
 };
 
 export type SheetSnapHeights = {
@@ -25,7 +29,7 @@ function heightsEqual(a: SheetSnapHeights, b: SheetSnapHeights): boolean {
   );
 }
 
-function measureSnapHeights(
+export function measureSnapHeights(
   hostEl: HTMLElement | null,
   chromeEl: HTMLElement | null,
   reserveHeightPx: number,
@@ -47,34 +51,50 @@ function measureSnapHeights(
 
 export function useSheetSnapHeights({
   hostEl,
-  chromeEl,
-  reserveHeightPx,
+  chromeRef,
+  getReserveHeightPx,
   halfSnapFraction,
-}: UseSheetSnapHeightsOptions): SheetSnapHeights {
-  const [heights, setHeights] = useState<SheetSnapHeights>(() =>
-    measureSnapHeights(hostEl, chromeEl, reserveHeightPx, halfSnapFraction),
+  onHeightsChangeRef,
+}: UseSheetSnapHeightsOptions): SheetSnapHeights & {
+  syncLayoutHeights: () => void;
+} {
+  const readHeights = useCallback(
+    () =>
+      measureSnapHeights(
+        hostEl,
+        chromeRef.current,
+        getReserveHeightPx(),
+        halfSnapFraction,
+      ),
+    [chromeRef, getReserveHeightPx, halfSnapFraction, hostEl],
   );
 
-  useEffect(() => {
-    const syncHeights = () => {
-      const next = measureSnapHeights(
-        hostEl,
-        chromeEl,
-        reserveHeightPx,
-        halfSnapFraction,
-      );
-      setHeights((current) => (heightsEqual(current, next) ? current : next));
-    };
+  const [heights, setHeights] = useState<SheetSnapHeights>(() => readHeights());
 
+  const syncHeights = useCallback(() => {
+    const next = readHeights();
+    setHeights((current) => (heightsEqual(current, next) ? current : next));
+    onHeightsChangeRef?.current?.(next);
+  }, [onHeightsChangeRef, readHeights]);
+
+  useLayoutEffect(() => {
+    if (!hostEl) {
+      return;
+    }
     syncHeights();
+  }, [hostEl, syncHeights]);
+
+  useEffect(() => {
+    if (!hostEl) {
+      return;
+    }
 
     let hostObserver: ResizeObserver | undefined;
     let chromeObserver: ResizeObserver | undefined;
     if (typeof ResizeObserver !== "undefined") {
-      if (hostEl) {
-        hostObserver = new ResizeObserver(syncHeights);
-        hostObserver.observe(hostEl);
-      }
+      hostObserver = new ResizeObserver(syncHeights);
+      hostObserver.observe(hostEl);
+      const chromeEl = chromeRef.current;
       if (chromeEl) {
         chromeObserver = new ResizeObserver(syncHeights);
         chromeObserver.observe(chromeEl);
@@ -88,7 +108,7 @@ export function useSheetSnapHeights({
       chromeObserver?.disconnect();
       window.removeEventListener("resize", syncHeights);
     };
-  }, [hostEl, chromeEl, reserveHeightPx, halfSnapFraction]);
+  }, [chromeRef, hostEl, syncHeights]);
 
-  return heights;
+  return { ...heights, syncLayoutHeights: syncHeights };
 }

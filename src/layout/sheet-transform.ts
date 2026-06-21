@@ -10,9 +10,13 @@ export type SheetFrameStyle = {
 export function sheetFrameStyle(
   visibleHeightPx: number,
   phase: "idle" | "dragging" | "settling",
+  suppressTransition = false,
 ): SheetFrameStyle {
   return {
     height: `${Math.round(visibleHeightPx)}px`,
-    transition: phase === "dragging" ? "none" : SHEET_SETTLE_HEIGHT_TRANSITION,
+    transition:
+      phase === "dragging" || suppressTransition
+        ? "none"
+        : SHEET_SETTLE_HEIGHT_TRANSITION,
   };
 }

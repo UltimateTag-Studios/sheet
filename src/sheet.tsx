@@ -1,28 +1,23 @@
-import type { CSSProperties, ReactNode, TransitionEvent } from "react";
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import type { CSSProperties, ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { SheetContextProvider } from "./context/sheet-context";
 import { useSheetHostEl } from "./context/sheet-host-context";
 import { useSheetMachine } from "./gesture/use-sheet-machine";
 import { useSheetPointerHandlers } from "./gesture/use-sheet-pointer-handlers";
 import { useSheetBodyScroll } from "./hooks/use-sheet-body-scroll";
+import { useSheetMeasure } from "./hooks/use-sheet-measure";
+import { useSheetSlideFrame } from "./hooks/use-sheet-slide-frame";
 import { isSheetAtCollapsedHeader } from "./layout/collapsed-header-state";
 import {
   DEFAULT_HALF_SNAP_FRACTION,
   normalizeHalfSnapFraction,
 } from "./layout/normalize-half-snap-fraction";
-import { canBodyScroll, sheetBodyRootClass } from "./layout/scroll-mode";
-import { sheetFrameStyle } from "./layout/sheet-transform";
+import { canBodyScroll } from "./layout/scroll-mode";
 import { readVisibleSheetHeightPx } from "./layout/snap-heights";
 import type { SheetSnap } from "./layout/snap-math";
-import { useSheetSnapHeights } from "./layout/use-snap-heights";
+import { syncSheetDomFrame } from "./layout/sync-sheet-dom-frame";
+import type { SheetSnapHeights } from "./layout/use-snap-heights";
 import type { SheetMachineState } from "./machine/sheet-machine";
 
 export type { SheetSnap };
@@ -48,58 +43,6 @@ export type SheetProps = {
   }) => void;
 };
 
-function applySheetSlideFrame(
-  sheetSlide: HTMLDivElement,
-  visibleHeightPx: number,
-  phase: "idle" | "dragging" | "settling",
-): void {
-  const frameStyle = sheetFrameStyle(visibleHeightPx, phase);
-  sheetSlide.style.height = frameStyle.height;
-  sheetSlide.style.transition = frameStyle.transition;
-}
-
-function syncSheetDomFrame(args: {
-  machineState: SheetMachineState;
-  sheetRoot: HTMLDivElement | null;
-  sheetSlide: HTMLDivElement | null;
-  bodyRoot: HTMLDivElement | null;
-  canBodyScrollRef: React.MutableRefObject<boolean>;
-}): void {
-  const { machineState, sheetRoot, sheetSlide, bodyRoot } = args;
-
-  if (sheetSlide) {
-    applySheetSlideFrame(sheetSlide, machineState.visibleHeightPx, "dragging");
-  }
-
-  if (sheetRoot) {
-    const atCollapsedHeader = isSheetAtCollapsedHeader({
-      sheetSnap: machineState.restingSnap,
-      isDragging: true,
-      visibleHeightPx: machineState.visibleHeightPx,
-      collapsedHeightPx: machineState.collapsedHeightPx,
-    });
-    if (atCollapsedHeader) {
-      sheetRoot.setAttribute("data-sheet-collapsed-header", "");
-    } else {
-      sheetRoot.removeAttribute("data-sheet-collapsed-header");
-    }
-    sheetRoot.dataset.sheetPhase = "dragging";
-  }
-
-  const nextCanBodyScroll = canBodyScroll({
-    sheetSnap: machineState.restingSnap,
-    visibleHeightPx: machineState.visibleHeightPx,
-    fullHeightPx: machineState.fullHeightPx,
-    isDragging: true,
-  });
-  if (nextCanBodyScroll !== args.canBodyScrollRef.current) {
-    args.canBodyScrollRef.current = nextCanBodyScroll;
-    if (bodyRoot) {
-      bodyRoot.className = sheetBodyRootClass(nextCanBodyScroll);
-    }
-  }
-}
-
 export function Sheet({
   children,
   snap,
@@ -113,36 +56,27 @@ export function Sheet({
 }: SheetProps) {
   const hostEl = useSheetHostEl();
   const resolvedHalfSnap = normalizeHalfSnapFraction(halfSnapFraction);
-
-  const onSnapHeightsChangeRef = useRef(onSnapHeightsChange);
-  onSnapHeightsChangeRef.current = onSnapHeightsChange;
+  const restingSnap = snap ?? defaultSnap;
 
   const sheetRootRef = useRef<HTMLDivElement | null>(null);
   const sheetSlideRef = useRef<HTMLDivElement | null>(null);
   const bodyRootRef = useRef<HTMLDivElement | null>(null);
   const canBodyScrollRef = useRef(false);
+  const onLayoutMeasureRef = useRef<
+    ((heights: SheetSnapHeights) => void) | undefined
+  >(undefined);
 
-  const [chromeEl, setChromeEl] = useState<HTMLElement | null>(null);
-  const [reserveHeightPx, setReserveHeightPx] = useState(0);
-
-  const { collapsedHeightPx, halfHeightPx, fullHeightPx } = useSheetSnapHeights(
-    {
-      hostEl,
-      chromeEl,
-      reserveHeightPx,
-      halfSnapFraction: resolvedHalfSnap,
-    },
-  );
-
-  useEffect(() => {
-    onSnapHeightsChangeRef.current?.({ collapsedHeightPx, fullHeightPx });
-  }, [collapsedHeightPx, fullHeightPx]);
-
-  const syncReserveHeightPx = useCallback((heightPx: number) => {
-    setReserveHeightPx((current) =>
-      current === heightPx ? current : heightPx,
-    );
-  }, []);
+  const {
+    collapsedHeightPx,
+    fullHeightPx,
+    registerChromeMeasure,
+    syncReserveHeightPx,
+  } = useSheetMeasure({
+    hostEl,
+    halfSnapFraction: resolvedHalfSnap,
+    onSnapHeightsChange,
+    onLayoutMeasureRef,
+  });
 
   const applyDragFrame = useCallback((machineState: SheetMachineState) => {
     syncSheetDomFrame({
@@ -154,12 +88,9 @@ export function Sheet({
     });
   }, []);
 
-  const { state, dispatch } = useSheetMachine({
-    restingSnap: snap ?? defaultSnap,
+  const { state, isReady, dispatch } = useSheetMachine({
+    restingSnap,
     controlledSnap: snap,
-    collapsedHeightPx,
-    halfHeightPx,
-    fullHeightPx,
     onSnapChange,
     onDragInteractionChange,
     onResult: (event, result) => {
@@ -169,33 +100,14 @@ export function Sheet({
     },
   });
 
-  const [canBodyScrollEnabled, setCanBodyScrollEnabled] = useState(() =>
-    canBodyScroll({
-      sheetSnap: state.restingSnap,
-      visibleHeightPx: state.visibleHeightPx,
-      fullHeightPx: state.fullHeightPx,
-      isDragging: state.phase === "dragging",
-    }),
-  );
-
-  useEffect(() => {
-    if (state.phase === "dragging") {
-      return;
-    }
-    const next = canBodyScroll({
-      sheetSnap: state.restingSnap,
-      visibleHeightPx: state.visibleHeightPx,
-      fullHeightPx: state.fullHeightPx,
-      isDragging: false,
+  onLayoutMeasureRef.current = (heights) => {
+    dispatch({
+      type: "measure",
+      collapsedHeightPx: heights.collapsedHeightPx,
+      halfHeightPx: heights.halfHeightPx,
+      fullHeightPx: heights.fullHeightPx,
     });
-    canBodyScrollRef.current = next;
-    setCanBodyScrollEnabled((current) => (current === next ? current : next));
-  }, [
-    state.phase,
-    state.restingSnap,
-    state.visibleHeightPx,
-    state.fullHeightPx,
-  ]);
+  };
 
   const {
     readScrollTop,
@@ -205,7 +117,7 @@ export function Sheet({
     releaseScrollMomentum,
     cancelScrollMomentum,
     clearScrollPointerTracking,
-  } = useSheetBodyScroll(state.restingSnap);
+  } = useSheetBodyScroll(state?.restingSnap ?? restingSnap);
 
   const scrollMomentum = useMemo(
     () => ({
@@ -230,10 +142,6 @@ export function Sheet({
     [registerBodyEl],
   );
 
-  const registerChromeMeasure = useCallback((node: HTMLElement | null) => {
-    setChromeEl(node);
-  }, []);
-
   const pointerHandlers = useSheetPointerHandlers(
     dispatch,
     readScrollTop,
@@ -241,43 +149,40 @@ export function Sheet({
     scrollMomentum,
   );
 
-  const frameStyle = useMemo(
-    () => sheetFrameStyle(state.visibleHeightPx, state.phase),
-    [state.phase, state.visibleHeightPx],
-  );
-
-  useLayoutEffect(() => {
-    if (state.phase === "dragging") {
-      return;
-    }
-    const slide = sheetSlideRef.current;
-    if (!slide) {
-      return;
-    }
-    applySheetSlideFrame(slide, state.visibleHeightPx, state.phase);
-  }, [state.phase, state.visibleHeightPx]);
-
-  const onTransitionEnd = useCallback(
-    (event: TransitionEvent<HTMLDivElement>) => {
-      if (event.target !== event.currentTarget) {
-        return;
-      }
-      if (event.propertyName !== "height") {
-        return;
-      }
-      if (state.phase === "settling") {
-        dispatch({ type: "settleComplete" });
-      }
+  const { frameStyle, onTransitionEnd } = useSheetSlideFrame({
+    visibleHeightPx: state?.visibleHeightPx ?? 0,
+    phase: state?.phase ?? "idle",
+    sheetSlideRef,
+    enabled: isReady,
+    onSettleComplete: () => {
+      dispatch({ type: "settleComplete" });
     },
-    [dispatch, state.phase],
-  );
-
-  const atCollapsedHeader = isSheetAtCollapsedHeader({
-    sheetSnap: state.restingSnap,
-    isDragging: state.phase === "dragging",
-    visibleHeightPx: state.visibleHeightPx,
-    collapsedHeightPx,
   });
+
+  const [canBodyScrollEnabled, setCanBodyScrollEnabled] = useState(false);
+
+  useEffect(() => {
+    if (!state || state.phase === "dragging") {
+      return;
+    }
+    const next = canBodyScroll({
+      sheetSnap: state.restingSnap,
+      visibleHeightPx: state.visibleHeightPx,
+      fullHeightPx: state.fullHeightPx,
+      isDragging: false,
+    });
+    canBodyScrollRef.current = next;
+    setCanBodyScrollEnabled((current) => (current === next ? current : next));
+  }, [state]);
+
+  const atCollapsedHeader =
+    state !== null &&
+    isSheetAtCollapsedHeader({
+      sheetSnap: state.restingSnap,
+      isDragging: state.phase === "dragging",
+      visibleHeightPx: state.visibleHeightPx,
+      collapsedHeightPx,
+    });
 
   const controlsValue = useMemo(
     () => ({
@@ -300,19 +205,13 @@ export function Sheet({
 
   const metricsValue = useMemo(
     () => ({
-      sheetSnap: state.restingSnap,
-      visibleHeightPx: state.visibleHeightPx,
+      sheetSnap: state?.restingSnap ?? restingSnap,
+      visibleHeightPx: state?.visibleHeightPx ?? 0,
       collapsedHeightPx,
       fullHeightPx,
-      isDragging: state.phase === "dragging",
+      isDragging: state?.phase === "dragging",
     }),
-    [
-      collapsedHeightPx,
-      fullHeightPx,
-      state.phase,
-      state.restingSnap,
-      state.visibleHeightPx,
-    ],
+    [collapsedHeightPx, fullHeightPx, restingSnap, state],
   );
 
   if (!hostEl) {
@@ -323,7 +222,7 @@ export function Sheet({
     <div
       ref={sheetRootRef}
       className="sheet"
-      data-sheet-phase={state.phase}
+      data-sheet-phase={state?.phase ?? "idle"}
       data-sheet-collapsed-header={atCollapsedHeader ? "" : undefined}
     >
       <div

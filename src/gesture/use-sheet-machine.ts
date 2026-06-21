@@ -12,9 +12,6 @@ import {
 export type UseSheetMachineOptions = {
   restingSnap: SheetSnap;
   controlledSnap?: SheetSnap;
-  collapsedHeightPx: number;
-  halfHeightPx: number;
-  fullHeightPx: number;
   onSnapChange?: (snap: SheetSnap) => void;
   onDragInteractionChange?: (isDragging: boolean) => void;
   /** Called after every dispatch — used for direct DOM updates during drag. */
@@ -41,17 +38,42 @@ function applyEffects(
   }
 }
 
+function bootstrapFromMeasure(
+  restingSnap: SheetSnap,
+  event: Extract<SheetMachineEvent, { type: "measure" }>,
+): SheetMachineState {
+  return createInitialSheetMachineState({
+    restingSnap,
+    collapsedHeightPx: event.collapsedHeightPx,
+    halfHeightPx: event.halfHeightPx,
+    fullHeightPx: event.fullHeightPx,
+  });
+}
+
+function ignoredGestureResult(restingSnap: SheetSnap): SheetMachineResult {
+  return {
+    state: {
+      phase: "idle",
+      visibleHeightPx: 0,
+      restingSnap,
+      gesture: null,
+      collapsedHeightPx: 0,
+      halfHeightPx: 0,
+      fullHeightPx: 0,
+    },
+    effects: [],
+  };
+}
+
 export function useSheetMachine({
   restingSnap,
   controlledSnap,
-  collapsedHeightPx,
-  halfHeightPx,
-  fullHeightPx,
   onSnapChange,
   onDragInteractionChange,
   onResult,
 }: UseSheetMachineOptions): {
-  state: SheetMachineState;
+  state: SheetMachineState | null;
+  isReady: boolean;
   dispatch: (event: SheetMachineEvent) => SheetMachineResult;
 } {
   const callbacksRef = useRef({ onSnapChange, onDragInteractionChange });
@@ -60,19 +82,26 @@ export function useSheetMachine({
   const onResultRef = useRef(onResult);
   onResultRef.current = onResult;
 
-  const [state, setState] = useState<SheetMachineState>(() =>
-    createInitialSheetMachineState({
-      restingSnap,
-      collapsedHeightPx,
-      halfHeightPx,
-      fullHeightPx,
-    }),
-  );
+  const restingSnapRef = useRef(restingSnap);
+  restingSnapRef.current = restingSnap;
 
-  const stateRef = useRef(state);
+  const [state, setState] = useState<SheetMachineState | null>(null);
+  const stateRef = useRef<SheetMachineState | null>(null);
 
   const dispatch = useCallback(
     (event: SheetMachineEvent): SheetMachineResult => {
+      if (stateRef.current === null) {
+        if (event.type !== "measure") {
+          return ignoredGestureResult(restingSnapRef.current);
+        }
+
+        const initial = bootstrapFromMeasure(restingSnapRef.current, event);
+        stateRef.current = initial;
+        onResultRef.current?.(event, { state: initial, effects: [] });
+        setState(initial);
+        return { state: initial, effects: [] };
+      }
+
       const result = reduceSheetMachine(stateRef.current, event);
       applyEffects(result.effects, callbacksRef.current);
       stateRef.current = result.state;
@@ -90,16 +119,7 @@ export function useSheetMachine({
   );
 
   useEffect(() => {
-    dispatch({
-      type: "measure",
-      collapsedHeightPx,
-      halfHeightPx,
-      fullHeightPx,
-    });
-  }, [collapsedHeightPx, halfHeightPx, fullHeightPx, dispatch]);
-
-  useEffect(() => {
-    if (controlledSnap === undefined) {
+    if (controlledSnap === undefined || stateRef.current === null) {
       return;
     }
     if (
@@ -114,5 +134,5 @@ export function useSheetMachine({
     dispatch({ type: "setSnap", snap: controlledSnap });
   }, [controlledSnap, dispatch]);
 
-  return { state, dispatch };
+  return { state, isReady: state !== null, dispatch };
 }
