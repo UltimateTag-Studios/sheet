@@ -166,8 +166,7 @@ Override semantic classes from `@siegetag/sheet/styles.css`:
 | `.sheet-slide` | Bottom-anchored surface (background, border, shadow; height set inline) |
 | `.sheet-handle` | Drag pill |
 | `.sheet-header` | Optional header content area |
-| `.sheet-header` `button`, `a`, `input`, … | Native controls are clickable; other header text stays drag-through |
-| `.sheet-header-interactive` | Opt-in for custom (non-native) header controls |
+| `.sheet-header-interactive` | Opt-in: header controls receive pointer events (chrome drag surface disables them by default) |
 | `.sheet-body-interactive` | Opt-in: non-native click targets get `touch-action: manipulation` inside the body scroll root |
 | `.sheet-divider` | Line between chrome and body (hidden at collapsed header via `data-sheet-collapsed-header`) |
 | `.sheet-bottom-reserve` | Hidden measurement node for reserve height (collapsed snap); body scroll uses the same length as padding |

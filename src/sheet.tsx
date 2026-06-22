@@ -186,8 +186,9 @@ export function Sheet({
     sheetSlideRef,
     enabled: isReady,
     onSettleComplete: () => {
-      dispatch({ type: "settleComplete" });
-      const snap = stateRefForSettle.current?.restingSnap;
+      const result = dispatch({ type: "settleComplete" });
+      emitLayoutFrameChange(result.state);
+      const snap = result.state.restingSnap;
       if (snap) {
         onSnapSettledRef.current?.(snap);
       }

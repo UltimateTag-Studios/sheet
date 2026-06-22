@@ -53,12 +53,26 @@ export function useSheetSlideFrame({
       return;
     }
     const suppress = suppressInitialLayoutTransitionRef.current;
+    const beforeHeightPx = Math.round(slide.getBoundingClientRect().height);
+    const targetHeightPx = Math.round(visibleHeightPx);
     applySheetSlideFrame(slide, visibleHeightPx, phase, suppress);
     if (suppress) {
       suppressInitialLayoutTransitionRef.current = false;
     }
     onLayoutFrameApplied?.();
-  }, [enabled, onLayoutFrameApplied, phase, sheetSlideRef, visibleHeightPx]);
+
+    if (phase === "settling" && beforeHeightPx === targetHeightPx) {
+      // No effective height change — CSS will not emit transitionend; avoid stuck settling.
+      queueMicrotask(onSettleComplete);
+    }
+  }, [
+    enabled,
+    onLayoutFrameApplied,
+    onSettleComplete,
+    phase,
+    sheetSlideRef,
+    visibleHeightPx,
+  ]);
 
   const onTransitionEnd = useCallback(
     (event: TransitionEvent<HTMLDivElement>) => {
