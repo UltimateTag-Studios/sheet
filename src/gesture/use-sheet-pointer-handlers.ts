@@ -27,6 +27,7 @@ type PointerTracking = {
 type PointerSession = {
   pointerId: number;
   tapTarget: EventTarget;
+  sheetBoundary: HTMLElement;
   startClientY: number;
   scrollTopPx: number;
   surface: SheetPointerSurface;
@@ -36,6 +37,13 @@ type PointerSession = {
 };
 
 const POINTER_UP_LISTENER_OPTS: AddEventListenerOptions = { capture: true };
+
+function pointerReleaseOnSheet(
+  target: EventTarget | null,
+  sheetBoundary: HTMLElement,
+): boolean {
+  return target instanceof Node && sheetBoundary.contains(target);
+}
 
 function detachDocumentTracking(tracking: PointerTracking): void {
   document.removeEventListener("pointermove", tracking.move);
@@ -65,8 +73,9 @@ function attachDocumentTracking(tracking: PointerTracking): void {
  * Tap vs drag on chrome and body:
  * 1. pointerdown (capture) — record press target, document listeners for move/up
  * 2. move past slop — commit sheet drag
- * 3. release without drag effect — preventDefault + click() the press target
- * 4. release after real drag — machine pointerUp; preventDefault when sheet/scroll moved
+ * 3. release without drag effect on the sheet — preventDefault + click() the press target
+ * 4. release after real drag on the sheet — machine pointerUp; preventDefault when sheet/scroll moved
+ * 5. release outside the sheet panel — end the gesture; only steal default when release is on-sheet
  */
 export function useSheetPointerHandlers(
   dispatch: (event: SheetMachineEvent) => SheetMachineResult,
@@ -173,13 +182,16 @@ export function useSheetPointerHandlers(
   const finishPointer = useCallback(
     (event: PointerEvent) => {
       const session = sessionRef.current;
-      if (!session) {
+      if (!session || session.pointerId !== event.pointerId) {
         return;
       }
 
-      const { hadEffect, tapTarget, committed: wasCommitted } = session;
-
-      event.preventDefault();
+      const {
+        hadEffect,
+        tapTarget,
+        committed: wasCommitted,
+        sheetBoundary,
+      } = session;
 
       if (wasCommitted) {
         dispatchRef.current({
@@ -190,6 +202,22 @@ export function useSheetPointerHandlers(
       }
 
       endPointerSession();
+
+      const releaseOnSheet = pointerReleaseOnSheet(event.target, sheetBoundary);
+
+      if (!releaseOnSheet) {
+        if (
+          !hadEffect &&
+          tapTarget instanceof HTMLElement &&
+          sheetBoundary.contains(tapTarget)
+        ) {
+          event.preventDefault();
+          tapTarget.click();
+        }
+        return;
+      }
+
+      event.preventDefault();
 
       if (!hadEffect && tapTarget instanceof HTMLElement) {
         tapTarget.click();
@@ -239,6 +267,11 @@ export function useSheetPointerHandlers(
           return;
         }
 
+        const sheetBoundary = event.currentTarget.closest(".sheet-slide");
+        if (!(sheetBoundary instanceof HTMLElement)) {
+          return;
+        }
+
         scrollMomentumRef.current.cancelScrollMomentum();
         scrollMomentumRef.current.clearScrollPointerTracking();
         endPointerSession();
@@ -255,6 +288,7 @@ export function useSheetPointerHandlers(
         sessionRef.current = {
           pointerId: event.pointerId,
           tapTarget: event.target,
+          sheetBoundary,
           startClientY: event.clientY,
           scrollTopPx: readScrollTopRef.current(),
           surface,

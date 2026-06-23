@@ -72,7 +72,6 @@ export function Sheet({
   const resolvedHalfSnap = normalizeHalfSnapFraction(halfSnapFraction);
   const restingSnap = snap ?? defaultSnap;
 
-  const sheetRootRef = useRef<HTMLDivElement | null>(null);
   const sheetSlideRef = useRef<HTMLDivElement | null>(null);
   const bodyRootRef = useRef<HTMLDivElement | null>(null);
   const canBodyScrollRef = useRef(false);
@@ -286,24 +285,19 @@ export function Sheet({
 
   return (
     <div
-      ref={sheetRootRef}
-      className="sheet"
+      ref={sheetSlideRef}
+      className="sheet sheet-slide"
       data-sheet-phase={state?.phase ?? "idle"}
       data-sheet-collapsed-header={atCollapsedHeader ? "" : undefined}
+      style={{
+        ...sheetSlideStyle,
+        ...frameStyle,
+      }}
+      onTransitionEnd={onTransitionEnd}
     >
-      <div
-        ref={sheetSlideRef}
-        className="sheet-slide"
-        style={{
-          ...sheetSlideStyle,
-          ...frameStyle,
-        }}
-        onTransitionEnd={onTransitionEnd}
-      >
-        <SheetContextProvider controls={controlsValue} metrics={metricsValue}>
-          <div className="sheet-inner">{children}</div>
-        </SheetContextProvider>
-      </div>
+      <SheetContextProvider controls={controlsValue} metrics={metricsValue}>
+        <div className="sheet-inner">{children}</div>
+      </SheetContextProvider>
     </div>
   );
 }

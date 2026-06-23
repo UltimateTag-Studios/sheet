@@ -906,5 +906,45 @@ describe("Sheet gesture integration", () => {
       pointerUp(42, 500);
       expect(screen.getByTestId("body-selected").textContent).toBe("yes");
     });
+
+    it("does not preventDefault on pointerup over an outside button after a drag", () => {
+      renderWithHost(<TestHalfSheetWithHeaderAndBodyButtons />);
+
+      const outside = document.createElement("button");
+      outside.type = "button";
+      outside.textContent = "Outside";
+      let defaultPreventedBySheetRouter = false;
+      outside.addEventListener(
+        "pointerup",
+        (event) => {
+          defaultPreventedBySheetRouter = event.defaultPrevented;
+        },
+        { capture: true },
+      );
+      document.body.appendChild(outside);
+
+      const chrome = document.querySelector("[data-sheet-chrome]");
+      if (!chrome) {
+        throw new Error("Expected sheet chrome");
+      }
+
+      pointerDown(chrome, 50, 700);
+      pointerMove(50, 500);
+      act(() => {
+        outside.dispatchEvent(
+          new PointerEvent("pointerup", {
+            pointerId: 50,
+            clientY: 10,
+            bubbles: true,
+            button: 0,
+            cancelable: true,
+          }),
+        );
+      });
+
+      expect(defaultPreventedBySheetRouter).toBe(false);
+
+      outside.remove();
+    });
   });
 });
