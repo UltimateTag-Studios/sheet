@@ -13,6 +13,7 @@ import type {
   SheetPointerSurface,
 } from "../machine/sheet-machine";
 import { SHEET_AXIS_THRESHOLD_PX } from "../machine/sheet-machine";
+import { activatePointerDownTarget } from "./activate-pointer-down-target";
 
 export type SheetPointerHandlers = {
   onChromePointerDown: (event: ReactPointerEvent<HTMLElement>) => void;
@@ -24,6 +25,7 @@ type PendingPointer = {
   startClientY: number;
   scrollTopPx: number;
   surface: SheetPointerSurface;
+  tapTarget: EventTarget;
 };
 
 type PointerTracking = {
@@ -65,7 +67,13 @@ function tryReleasePointerCapture(
   }
 }
 
-/** Unified sheet pointer routing for handle chrome and body surfaces. */
+/**
+ * Tap vs drag on chrome and body:
+ * 1. pointerdown (capture) — record target, listen for move/up
+ * 2. move past slop — commit sheet drag
+ * 3. release without slop — preventDefault + click() the press target
+ * 4. release after drag — machine pointerUp; preventDefault only if sheet/scroll moved
+ */
 export function useSheetPointerHandlers(
   dispatch: (event: SheetMachineEvent) => SheetMachineResult,
   readScrollTop: () => number,
@@ -104,6 +112,8 @@ export function useSheetPointerHandlers(
       return;
     }
 
+    const captureOpts: AddEventListenerOptions = { capture: true };
+
     if (tracking.moveOnDocument) {
       document.removeEventListener("pointermove", tracking.move);
     } else if (tracking.surfaceTarget) {
@@ -111,11 +121,19 @@ export function useSheetPointerHandlers(
     }
 
     if (tracking.upOnDocument) {
-      document.removeEventListener("pointerup", tracking.up);
-      document.removeEventListener("pointercancel", tracking.up);
+      document.removeEventListener("pointerup", tracking.up, captureOpts);
+      document.removeEventListener("pointercancel", tracking.up, captureOpts);
     } else if (tracking.surfaceTarget) {
-      tracking.surfaceTarget.removeEventListener("pointerup", tracking.up);
-      tracking.surfaceTarget.removeEventListener("pointercancel", tracking.up);
+      tracking.surfaceTarget.removeEventListener(
+        "pointerup",
+        tracking.up,
+        captureOpts,
+      );
+      tracking.surfaceTarget.removeEventListener(
+        "pointercancel",
+        tracking.up,
+        captureOpts,
+      );
     }
 
     trackingRef.current = null;
@@ -146,6 +164,8 @@ export function useSheetPointerHandlers(
       return;
     }
 
+    const captureOpts: AddEventListenerOptions = { capture: true };
+
     if (!tracking.moveOnDocument) {
       captureTarget.removeEventListener("pointermove", tracking.move);
       document.addEventListener("pointermove", tracking.move);
@@ -153,10 +173,14 @@ export function useSheetPointerHandlers(
     }
 
     if (!tracking.upOnDocument) {
-      captureTarget.removeEventListener("pointerup", tracking.up);
-      captureTarget.removeEventListener("pointercancel", tracking.up);
-      document.addEventListener("pointerup", tracking.up);
-      document.addEventListener("pointercancel", tracking.up);
+      captureTarget.removeEventListener("pointerup", tracking.up, captureOpts);
+      captureTarget.removeEventListener(
+        "pointercancel",
+        tracking.up,
+        captureOpts,
+      );
+      document.addEventListener("pointerup", tracking.up, captureOpts);
+      document.addEventListener("pointercancel", tracking.up, captureOpts);
       tracking.upOnDocument = true;
       tracking.surfaceTarget = null;
     }
@@ -281,7 +305,10 @@ export function useSheetPointerHandlers(
         return;
       }
 
+      const tapTarget = pendingRef.current?.tapTarget ?? null;
+      event.preventDefault();
       resetPointerSession(event.pointerId);
+      activatePointerDownTarget(tapTarget);
     },
     [resetPointerSession],
   );
@@ -328,7 +355,7 @@ export function useSheetPointerHandlers(
         }
 
         const phase = readMachinePhaseRef.current();
-        if (phase === "dragging" || phase === "settling") {
+        if (phase === "dragging") {
           return;
         }
 
@@ -340,6 +367,7 @@ export function useSheetPointerHandlers(
           startClientY: event.clientY,
           scrollTopPx: readScrollTopRef.current(),
           surface,
+          tapTarget: event.target,
         };
         capturedPointerIdRef.current = event.pointerId;
         captureTargetRef.current = event.currentTarget;
@@ -359,10 +387,11 @@ export function useSheetPointerHandlers(
           cancelPendingPointer(pointerEvent);
         };
 
+        const captureOpts: AddEventListenerOptions = { capture: true };
         const surfaceTarget = event.currentTarget;
         surfaceTarget.addEventListener("pointermove", move);
-        surfaceTarget.addEventListener("pointerup", up);
-        surfaceTarget.addEventListener("pointercancel", up);
+        surfaceTarget.addEventListener("pointerup", up, captureOpts);
+        surfaceTarget.addEventListener("pointercancel", up, captureOpts);
         trackingRef.current = {
           move,
           up,

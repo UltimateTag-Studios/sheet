@@ -570,10 +570,6 @@ describe("Sheet gesture integration", () => {
     pointerDown(button, 7, 400);
     pointerUp(7, 400);
 
-    act(() => {
-      fireEvent.click(button);
-    });
-
     expect(screen.getByTestId("selected").textContent).toBe("yes");
     expect(
       document.querySelector(".sheet")?.getAttribute("data-sheet-phase"),
@@ -641,6 +637,7 @@ describe("Sheet gesture integration", () => {
 
     pointerUp(7, 400);
 
+    expect(screen.getByTestId("selected").textContent).toBe("yes");
     expect(
       document.querySelector(".sheet")?.getAttribute("data-sheet-phase"),
     ).toBe("idle");
@@ -774,9 +771,6 @@ describe("Sheet gesture integration", () => {
       const row = screen.getByTestId("row-1");
       pointerDown(row, 20, 500);
       pointerUp(20, 500);
-      act(() => {
-        fireEvent.click(row);
-      });
 
       expect(screen.getByTestId("last-tapped-row").textContent).toBe("1");
       expect(body.scrollTop).toBe(0);
@@ -796,9 +790,6 @@ describe("Sheet gesture integration", () => {
       const row = screen.getByTestId("row-15");
       pointerDown(row, 21, 500);
       pointerUp(21, 500);
-      act(() => {
-        fireEvent.click(row);
-      });
 
       expect(screen.getByTestId("last-tapped-row").textContent).toBe("15");
       expect(screen.getByTestId("snap").textContent).toBe("full");
@@ -867,26 +858,20 @@ describe("Sheet gesture integration", () => {
       const button = screen.getByTestId("header-action-button");
       pointerDown(button, 30, 400);
       pointerUp(30, 400);
-      act(() => {
-        fireEvent.click(button);
-      });
 
       expect(screen.getByTestId("header-action").textContent).toBe("fired");
       expect(sheetPhase()).toBe("idle");
     });
 
-    it("fires body row when pointer release jitters exactly to move slop", () => {
+    it("does not activate a row when jitter crosses slop without sheet effect", () => {
       renderWithHost(<TestFullSheetWithButtonList />);
 
       const row = screen.getByTestId("row-1");
       pointerDown(row, 35, 500);
       pointerMove(35, 508);
       pointerUp(35, 508);
-      act(() => {
-        fireEvent.click(row);
-      });
 
-      expect(screen.getByTestId("last-tapped-row").textContent).toBe("1");
+      expect(screen.getByTestId("last-tapped-row").textContent).toBe("none");
       expect(sheetPhase()).toBe("idle");
     });
 
@@ -912,9 +897,6 @@ describe("Sheet gesture integration", () => {
       const button = screen.getByTestId("header-dismiss");
       pointerDown(button, 32, 200);
       pointerUp(32, 200);
-      act(() => {
-        fireEvent.click(button);
-      });
 
       expect(screen.getByTestId("header-action").textContent).toBe("dismiss");
       expect(sheetPhase()).toBe("idle");
@@ -946,17 +928,11 @@ describe("Sheet gesture integration", () => {
       const headerButton = screen.getByTestId("header-action-button");
       pointerDown(headerButton, 41, 420);
       pointerUp(41, 420);
-      act(() => {
-        fireEvent.click(headerButton);
-      });
       expect(screen.getByTestId("header-selected").textContent).toBe("yes");
 
       const bodyButton = screen.getByTestId("body-action-button");
       pointerDown(bodyButton, 42, 500);
       pointerUp(42, 500);
-      act(() => {
-        fireEvent.click(bodyButton);
-      });
       expect(screen.getByTestId("body-selected").textContent).toBe("yes");
     });
   });
