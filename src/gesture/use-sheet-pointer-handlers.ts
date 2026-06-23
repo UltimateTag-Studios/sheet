@@ -165,41 +165,27 @@ export function useSheetPointerHandlers(
     [applyMoveResult, resetPointerSession],
   );
 
-  const finishCommittedPointer = useCallback(
+  const finishPointer = useCallback(
     (event: PointerEvent) => {
-      if (!committedRef.current) {
-        return;
-      }
-
       const hadEffect = gestureHadEffectRef.current;
       const tapTarget = tapTargetRef.current;
+      const wasCommitted = committedRef.current;
 
       event.preventDefault();
 
-      dispatchRef.current({
-        type: "pointerUp",
-        pointerId: event.pointerId,
-      });
-      scrollMomentumRef.current.releaseScrollMomentum();
+      if (wasCommitted) {
+        dispatchRef.current({
+          type: "pointerUp",
+          pointerId: event.pointerId,
+        });
+        scrollMomentumRef.current.releaseScrollMomentum();
+      }
+
       resetPointerSession();
 
       if (!hadEffect) {
         activatePointerDownTarget(tapTarget);
       }
-    },
-    [resetPointerSession],
-  );
-
-  const cancelPendingPointer = useCallback(
-    (event: PointerEvent) => {
-      if (committedRef.current) {
-        return;
-      }
-
-      const tapTarget = tapTargetRef.current;
-      event.preventDefault();
-      resetPointerSession();
-      activatePointerDownTarget(tapTarget);
     },
     [resetPointerSession],
   );
@@ -269,11 +255,7 @@ export function useSheetPointerHandlers(
           onPointerMove(pointerEvent);
         };
         const up = (pointerEvent: PointerEvent) => {
-          if (committedRef.current) {
-            finishCommittedPointer(pointerEvent);
-            return;
-          }
-          cancelPendingPointer(pointerEvent);
+          finishPointer(pointerEvent);
         };
 
         document.addEventListener("pointermove", move);
@@ -285,12 +267,7 @@ export function useSheetPointerHandlers(
         );
         trackingRef.current = { move, up };
       },
-    [
-      cancelPendingPointer,
-      finishCommittedPointer,
-      onPointerMove,
-      removePointerTracking,
-    ],
+    [finishPointer, onPointerMove, removePointerTracking],
   );
 
   useEffect(() => () => removePointerTracking(), [removePointerTracking]);
