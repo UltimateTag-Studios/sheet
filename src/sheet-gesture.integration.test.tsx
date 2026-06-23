@@ -142,7 +142,13 @@ function TestFullSheetWithBottomReserve() {
   const [snap, setSnap] = useState<SheetSnap>("full");
 
   return (
-    <Sheet snap={snap} onSnapChange={setSnap}>
+    <Sheet
+      snap={snap}
+      onSnapChange={setSnap}
+      layout={{
+        bottomChromeReserve: { reserve: "80px", gap: "16px" },
+      }}
+    >
       <SheetLayout
         header={<div data-testid="sheet-header">Header title</div>}
         body={
@@ -150,8 +156,6 @@ function TestFullSheetWithBottomReserve() {
             Body
           </div>
         }
-        bottomReserve="80px"
-        bodyInnerStyle={{ paddingBottom: "16px" }}
       />
     </Sheet>
   );
@@ -514,11 +518,13 @@ describe("Sheet gesture integration", () => {
 
   it("snaps chrome back to collapsed after a small handle drag", () => {
     renderWithHost(
-      <Sheet snap="collapsed">
+      <Sheet
+        snap="collapsed"
+        layout={{ bottomChromeReserve: { reserve: "80px", gap: "0" } }}
+      >
         <SheetLayout
           header={<div data-testid="sheet-header">Header title</div>}
           body={<div>Body</div>}
-          bottomReserve="80px"
         />
       </Sheet>,
     );

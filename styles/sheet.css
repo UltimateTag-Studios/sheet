@@ -40,8 +40,8 @@
   pointer-events: auto;
   outline: none;
 
-  border-top-left-radius: 0.75rem;
-  border-top-right-radius: 0.75rem;
+  border-top-left-radius: var(--sheet-border-radius, 0.75rem);
+  border-top-right-radius: var(--sheet-border-radius, 0.75rem);
   border: 1px solid rgba(0, 0, 0, 0.08);
   border-bottom: none;
   background: rgba(255, 255, 255, 0.92);
@@ -93,6 +93,8 @@
 
 .sheet-header {
   flex-shrink: 0;
+  padding-inline: var(--sheet-header-padding-inline, 0);
+  padding-block: var(--sheet-header-padding-block, 0);
 }
 
 .sheet-handle {
@@ -101,13 +103,15 @@
   margin-inline: auto;
   flex-shrink: 0;
   height: var(--sheet-handle-bar-height);
-  width: 2.5rem;
+  width: var(--sheet-handle-width, 2.5rem);
   border-radius: 9999px;
   background: rgba(0, 0, 0, 0.15);
 }
 
 .sheet-divider {
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  margin-inline: var(--sheet-divider-padding-inline, 0);
+  margin-block: var(--sheet-divider-padding-block, 0);
+  border-bottom: var(--sheet-divider-height, 1px) solid rgba(0, 0, 0, 0.08);
 }
 
 .sheet[data-sheet-collapsed-header] .sheet-divider {
@@ -180,4 +184,28 @@
     [data-sheet-interactive]
   ) {
   touch-action: manipulation;
+}
+
+.sheet-body-inner {
+  display: flex;
+  min-height: 100%;
+  flex-direction: column;
+  gap: var(--sheet-body-gap, 0);
+  padding-inline: var(--sheet-body-padding-inline, 0);
+  padding-block: var(--sheet-body-padding-block, 0);
+}
+
+[data-sheet-theme="dark"] .sheet-slide {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(23, 23, 23, 0.92);
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.35);
+  color: #fafafa;
+}
+
+[data-sheet-theme="dark"] .sheet-handle {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+[data-sheet-theme="dark"] .sheet-divider {
+  border-bottom-color: rgba(255, 255, 255, 0.08);
 }

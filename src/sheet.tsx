@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { SheetContextProvider } from "./context/sheet-context";
@@ -16,10 +16,11 @@ import {
 import { canBodyScroll } from "./layout/scroll-mode";
 import type { SheetLayoutFrameChange } from "./layout/sheet-layout-frame-change";
 import { toSheetLayoutFrameChange } from "./layout/sheet-layout-frame-change";
+import type { SheetLayout } from "./layout/sheet-layout-vars";
+import { buildSheetLayoutVars } from "./layout/sheet-layout-vars";
 import { readVisibleSheetHeightPx } from "./layout/snap-heights";
 import type { SheetSnap } from "./layout/snap-math";
 import type { SheetSnapHeights } from "./layout/use-snap-heights";
-import type { SheetMachineState } from "./machine/sheet-machine";
 
 export type { SheetLayoutFrameChange };
 
@@ -35,10 +36,8 @@ export type SheetProps = {
   onDragInteractionChange?: (isDragging: boolean) => void;
   /** Fraction snap between collapsed and full (default 0.5). */
   halfSnapFraction?: number;
-  /** Merged layout vars + optional sheet surface visual overrides. */
-  sheetStyle?: CSSProperties;
-  /** Optional handle visual overrides. */
-  sheetHandleStyle?: CSSProperties;
+  /** Sheet geometry — spacing/sizing tokens as CSS variables. */
+  layout?: SheetLayout;
   /** Called when measured snap heights change. */
   onSnapHeightsChange?: (heights: {
     collapsedHeightPx: number;
@@ -62,8 +61,7 @@ export function Sheet({
   onSnapChange,
   onDragInteractionChange,
   halfSnapFraction,
-  sheetStyle,
-  sheetHandleStyle,
+  layout = {},
   onSnapHeightsChange,
   onSnapSettled,
   onLayoutFrameChange,
@@ -212,6 +210,8 @@ export function Sheet({
     setCanBodyScrollEnabled((current) => (current === next ? current : next));
   }, [state]);
 
+  const sheetSlideStyle = useMemo(() => buildSheetLayoutVars(layout), [layout]);
+
   const atCollapsedHeader =
     state !== null &&
     isSheetAtCollapsedHeader({
@@ -224,7 +224,7 @@ export function Sheet({
   const controlsValue = useMemo(
     () => ({
       pointerHandlers,
-      sheetHandleStyle,
+      layout,
       canBodyScroll: canBodyScrollEnabled,
       registerBodyEl: registerBodyRoot,
       registerChromeMeasure,
@@ -232,10 +232,10 @@ export function Sheet({
     }),
     [
       canBodyScrollEnabled,
+      layout,
       pointerHandlers,
       registerBodyRoot,
       registerChromeMeasure,
-      sheetHandleStyle,
       syncReserveHeightPx,
     ],
   );
@@ -266,7 +266,7 @@ export function Sheet({
         ref={sheetSlideRef}
         className="sheet-slide"
         style={{
-          ...sheetStyle,
+          ...sheetSlideStyle,
           ...frameStyle,
         }}
         onTransitionEnd={onTransitionEnd}

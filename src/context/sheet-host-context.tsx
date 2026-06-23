@@ -9,6 +9,8 @@ import {
   useSyncExternalStore,
 } from "react";
 
+import { DEFAULT_THEME, SHEET_THEME_ATTR, type Theme } from "../theme/theme";
+
 type SheetHostStore = {
   subscribe: (onStoreChange: () => void) => () => void;
   getSnapshot: () => HTMLElement | null;
@@ -32,10 +34,17 @@ export type SheetHostProps = {
   children: ReactNode;
   className?: string;
   style?: CSSProperties;
+  /** Sets `data-sheet-theme` for bundled light/dark surfaces. Default `light`. */
+  theme?: Theme;
 };
 
 /** Sized container for a sheet — snap heights measure from this element. */
-export function SheetHost({ children, className, style }: SheetHostProps) {
+export function SheetHost({
+  children,
+  className,
+  style,
+  theme = DEFAULT_THEME,
+}: SheetHostProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const listenersRef = useRef(new Set<() => void>());
 
@@ -64,7 +73,12 @@ export function SheetHost({ children, className, style }: SheetHostProps) {
 
   return (
     <SheetHostContext.Provider value={store}>
-      <div ref={hostRef} className={className} style={style}>
+      <div
+        ref={hostRef}
+        className={className}
+        style={style}
+        {...{ [SHEET_THEME_ATTR]: theme }}
+      >
         {children}
       </div>
     </SheetHostContext.Provider>

@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { useLayoutEffect, useRef } from "react";
 
 import { SheetHandleSpacer } from "./components/handle-spacer";
@@ -14,30 +14,22 @@ export type SheetLayoutProps = {
   /** Optional fixed header in sheet chrome. Omit for handle-only layout. */
   header?: ReactNode;
   body: ReactNode;
-  headerStyle?: CSSProperties;
-  bodyInnerStyle?: CSSProperties;
-  /** Always-on bottom reserve spacer height (e.g. tab bar clearance). CSS length. */
-  bottomReserve?: string;
 };
 
 /** Sheet chrome (handle + optional header) and scroll/drag body below the divider. */
-export function SheetLayout({
-  header,
-  body,
-  headerStyle,
-  bodyInnerStyle,
-  bottomReserve,
-}: SheetLayoutProps) {
+export function SheetLayout({ header, body }: SheetLayoutProps) {
   const {
     registerBodyEl,
     registerChromeMeasure,
     syncReserveHeightPx,
     pointerHandlers,
-    sheetHandleStyle,
+    layout,
   } = useSheetControlsContext();
   const canBodyScroll = useCanBodyScroll();
   const hasHeader = header != null;
   const reserveSpacerRef = useRef<HTMLDivElement | null>(null);
+  const bottomReserve = layout.bottomChromeReserve?.reserve;
+  const bottomGap = layout.bottomChromeReserve?.gap;
 
   useLayoutEffect(() => {
     if (!bottomReserve) {
@@ -61,15 +53,13 @@ export function SheetLayout({
 
   const bodyInnerScrollStyle = mergeBodyInnerScrollStyle(
     bottomReserve,
-    bodyInnerStyle,
+    bottomGap ? { paddingBottom: bottomGap } : undefined,
   );
 
   return (
     <div className="sheet-layers">
       <SheetChrome
         measureRef={registerChromeMeasure}
-        handleStyle={sheetHandleStyle}
-        style={headerStyle}
         onChromePointerDown={pointerHandlers.onChromePointerDown}
       >
         {hasHeader ? (
@@ -86,7 +76,9 @@ export function SheetLayout({
         data-sheet-scroll-root
         onPointerDownCapture={pointerHandlers.onBodyPointerDown}
       >
-        <div style={bodyInnerScrollStyle}>{body}</div>
+        <div className="sheet-body-inner" style={bodyInnerScrollStyle}>
+          {body}
+        </div>
       </div>
       {bottomReserve ? (
         <div

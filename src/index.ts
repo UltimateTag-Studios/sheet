@@ -11,16 +11,32 @@ export { normalizeHalfSnapFraction } from "./layout/normalize-half-snap-fraction
 export type { SheetLayoutFrameChange } from "./layout/sheet-layout-frame-change";
 export { toSheetLayoutFrameChange } from "./layout/sheet-layout-frame-change";
 export type {
-  SheetGeometry,
-  SheetStyles,
-  SheetVisualStyles,
+  SheetBodyLayout,
+  SheetBottomChromeReserveLayout,
+  SheetDividerLayout,
+  SheetHandleLayout,
+  SheetLayout,
+  SheetListItemLayout,
+  SheetPanelLayout,
+  SheetSectionPaddingLayout,
 } from "./layout/sheet-layout-vars";
 export {
   buildSheetLayoutVars,
-  buildSheetStyle,
+  DEFAULT_SHEET_BODY_GAP,
+  DEFAULT_SHEET_BODY_PADDING_HORIZONTAL,
+  DEFAULT_SHEET_BODY_PADDING_VERTICAL,
+  DEFAULT_SHEET_BORDER_RADIUS,
+  DEFAULT_SHEET_DIVIDER_HEIGHT,
+  DEFAULT_SHEET_DIVIDER_PADDING_HORIZONTAL,
+  DEFAULT_SHEET_DIVIDER_PADDING_VERTICAL,
   DEFAULT_SHEET_HANDLE_BAR_HEIGHT,
   DEFAULT_SHEET_HANDLE_MARGIN_BOTTOM,
   DEFAULT_SHEET_HANDLE_MARGIN_TOP,
+  DEFAULT_SHEET_HANDLE_WIDTH,
+  DEFAULT_SHEET_HEADER_PADDING_HORIZONTAL,
+  DEFAULT_SHEET_HEADER_PADDING_VERTICAL,
+  DEFAULT_SHEET_LIST_ITEM_GAP,
+  mergeSheetLayout,
 } from "./layout/sheet-layout-vars";
 export {
   FALLBACK_COLLAPSED_HEIGHT_PX,
@@ -38,3 +54,5 @@ export {
 } from "./sheet";
 export type { SheetLayoutProps } from "./sheet-layout";
 export { SheetLayout } from "./sheet-layout";
+export type { Theme } from "./theme/theme";
+export { DEFAULT_THEME, SHEET_THEME_ATTR } from "./theme/theme";

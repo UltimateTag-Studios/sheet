@@ -28,4 +28,16 @@ describe("SheetHost", () => {
     expect(screen.getByTestId("host-probe").textContent).toBe("sheet-host");
     expect(document.querySelector(".sheet-host")).toBeTruthy();
   });
+
+  it("sets data-sheet-theme on the host", () => {
+    render(
+      <SheetHost className="sheet-host" theme="dark">
+        <HostProbe />
+      </SheetHost>,
+    );
+
+    expect(
+      document.querySelector(".sheet-host")?.getAttribute("data-sheet-theme"),
+    ).toBe("dark");
+  });
 });

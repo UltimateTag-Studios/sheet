@@ -1,7 +1,3 @@
-import type { CSSProperties } from "react";
-
-export function SheetHandle({ style }: { style?: CSSProperties }) {
-  return (
-    <div className="sheet-handle" style={style} data-sheet-handle aria-hidden />
-  );
+export function SheetHandle() {
+  return <div className="sheet-handle" data-sheet-handle aria-hidden />;
 }
