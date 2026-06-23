@@ -53,6 +53,19 @@ function Demo() {
 
 `SheetSnap`: `"collapsed"` | `"half"` | `"full"`. Controlled via `snap` + `onSnapChange`. Use `onSnapSettled` when you need the final snap after animation (e.g. deselect on collapse in `@siegetag/sheet-map`).
 
+### Tap vs drag
+
+The gesture machine distinguishes **tap** from **drag** using move slop (8px) on every surface — handle, header, and body. A tap never reaches the machine: pointer routing holds a pending gesture in refs until slop commits, then dispatches `pointerDown` + `pointerMove`. Buttons and links receive normal clicks on the first tap.
+
+- **Chrome** (handle + header): drag past slop always resizes the sheet.
+- **Body below full height**: drag past slop resizes the sheet.
+- **Body at full height, scroll top**: finger up scrolls content; finger down collapses the sheet.
+- **Body at full height, scrolled**: drag scrolls; reaching scroll top continues into sheet collapse in one gesture.
+
+No opt-in CSS classes or element whitelists are required for interactivity. Put buttons and links directly in `SheetLayout` header and body slots.
+
+See `apps/sheet-demo` route `/interactive` for a scrollable button-list proof.
+
 ### Bottom chrome reserve
 
 For floating tab bars or other fixed bottom UI:

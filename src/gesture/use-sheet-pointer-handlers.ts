@@ -9,12 +9,29 @@ import type {
   SheetMachineEvent,
   SheetMachineResult,
   SheetMachineState,
+  SheetPhase,
   SheetPointerSurface,
 } from "../machine/sheet-machine";
+import { SHEET_AXIS_THRESHOLD_PX } from "../machine/sheet-machine";
 
 export type SheetPointerHandlers = {
   onChromePointerDown: (event: ReactPointerEvent<HTMLElement>) => void;
   onBodyPointerDown: (event: ReactPointerEvent<HTMLElement>) => void;
+};
+
+type PendingPointer = {
+  pointerId: number;
+  startClientY: number;
+  scrollTopPx: number;
+  surface: SheetPointerSurface;
+};
+
+type PointerTracking = {
+  move: (event: PointerEvent) => void;
+  up: (event: PointerEvent) => void;
+  moveOnDocument: boolean;
+  upOnDocument: boolean;
+  surfaceTarget: HTMLElement | null;
 };
 
 function trySetPointerCapture(target: HTMLElement, pointerId: number): void {
@@ -52,6 +69,7 @@ function tryReleasePointerCapture(
 export function useSheetPointerHandlers(
   dispatch: (event: SheetMachineEvent) => SheetMachineResult,
   readScrollTop: () => number,
+  readMachinePhase: () => SheetPhase | null,
   applyBodyScrollDelta: (deltaPx: number) => void,
   scrollMomentum: {
     recordScrollPointerSample: (clientY: number) => void;
@@ -60,61 +78,103 @@ export function useSheetPointerHandlers(
     clearScrollPointerTracking: () => void;
   },
 ): SheetPointerHandlers {
+  const pendingRef = useRef<PendingPointer | null>(null);
   const capturedPointerIdRef = useRef<number | null>(null);
   const captureTargetRef = useRef<HTMLElement | null>(null);
-  const draggingRef = useRef(false);
-  const gestureCommittedRef = useRef(false);
-  const documentListenersRef = useRef<{
-    move: (event: PointerEvent) => void;
-    up: (event: PointerEvent) => void;
-  } | null>(null);
+  const committedRef = useRef(false);
+  const gestureHadEffectRef = useRef(false);
+  const gestureStartVisibleHeightRef = useRef<number | null>(null);
+  const draggingCaptureRef = useRef(false);
+  const trackingRef = useRef<PointerTracking | null>(null);
   const dispatchRef = useRef(dispatch);
   const readScrollTopRef = useRef(readScrollTop);
+  const readMachinePhaseRef = useRef(readMachinePhase);
   const applyBodyScrollDeltaRef = useRef(applyBodyScrollDelta);
   const scrollMomentumRef = useRef(scrollMomentum);
 
   dispatchRef.current = dispatch;
   readScrollTopRef.current = readScrollTop;
+  readMachinePhaseRef.current = readMachinePhase;
   applyBodyScrollDeltaRef.current = applyBodyScrollDelta;
   scrollMomentumRef.current = scrollMomentum;
 
-  const removeDocumentListeners = useCallback(() => {
-    const listeners = documentListenersRef.current;
-    if (!listeners) {
+  const removePointerTracking = useCallback(() => {
+    const tracking = trackingRef.current;
+    if (!tracking) {
       return;
     }
 
-    document.removeEventListener("pointermove", listeners.move);
-    document.removeEventListener("pointerup", listeners.up);
-    document.removeEventListener("pointercancel", listeners.up);
-    documentListenersRef.current = null;
+    if (tracking.moveOnDocument) {
+      document.removeEventListener("pointermove", tracking.move);
+    } else if (tracking.surfaceTarget) {
+      tracking.surfaceTarget.removeEventListener("pointermove", tracking.move);
+    }
+
+    if (tracking.upOnDocument) {
+      document.removeEventListener("pointerup", tracking.up);
+      document.removeEventListener("pointercancel", tracking.up);
+    } else if (tracking.surfaceTarget) {
+      tracking.surfaceTarget.removeEventListener("pointerup", tracking.up);
+      tracking.surfaceTarget.removeEventListener("pointercancel", tracking.up);
+    }
+
+    trackingRef.current = null;
   }, []);
 
-  const endCapture = useCallback(
+  const resetPointerSession = useCallback(
     (pointerId: number) => {
       const captureTarget = captureTargetRef.current;
       if (captureTarget) {
         tryReleasePointerCapture(captureTarget, pointerId);
       }
+      pendingRef.current = null;
       captureTargetRef.current = null;
       capturedPointerIdRef.current = null;
-      draggingRef.current = false;
-      gestureCommittedRef.current = false;
-      removeDocumentListeners();
+      committedRef.current = false;
+      gestureHadEffectRef.current = false;
+      gestureStartVisibleHeightRef.current = null;
+      draggingCaptureRef.current = false;
+      removePointerTracking();
     },
-    [removeDocumentListeners],
+    [removePointerTracking],
   );
+
+  const promoteToDocumentPointerTracking = useCallback(() => {
+    const tracking = trackingRef.current;
+    const captureTarget = captureTargetRef.current;
+    if (!tracking || !captureTarget) {
+      return;
+    }
+
+    if (!tracking.moveOnDocument) {
+      captureTarget.removeEventListener("pointermove", tracking.move);
+      document.addEventListener("pointermove", tracking.move);
+      tracking.moveOnDocument = true;
+    }
+
+    if (!tracking.upOnDocument) {
+      captureTarget.removeEventListener("pointerup", tracking.up);
+      captureTarget.removeEventListener("pointercancel", tracking.up);
+      document.addEventListener("pointerup", tracking.up);
+      document.addEventListener("pointercancel", tracking.up);
+      tracking.upOnDocument = true;
+      tracking.surfaceTarget = null;
+    }
+  }, []);
 
   const applyMoveResult = useCallback(
     (event: PointerEvent, result: SheetMachineResult) => {
       const intent = result.state.gesture?.intent;
+      const scrollDeltaPx = result.bodyScrollDeltaPx ?? 0;
+      const heightChanged =
+        gestureStartVisibleHeightRef.current !== null &&
+        result.state.visibleHeightPx !== gestureStartVisibleHeightRef.current;
 
-      if (
-        result.bodyScrollDeltaPx !== undefined &&
-        result.bodyScrollDeltaPx !== 0
-      ) {
-        applyBodyScrollDeltaRef.current(result.bodyScrollDeltaPx);
-        gestureCommittedRef.current = true;
+      if (scrollDeltaPx !== 0) {
+        applyBodyScrollDeltaRef.current(scrollDeltaPx);
+        gestureHadEffectRef.current = true;
+      } else if (heightChanged) {
+        gestureHadEffectRef.current = true;
       }
 
       if (intent === "scroll") {
@@ -125,9 +185,9 @@ export function useSheetPointerHandlers(
 
       if (
         result.state.phase === "dragging" &&
-        (intent === "sheet" || intent === "scroll")
+        (intent === "sheet" || intent === "scroll") &&
+        gestureHadEffectRef.current
       ) {
-        gestureCommittedRef.current = true;
         event.preventDefault();
       }
     },
@@ -136,22 +196,114 @@ export function useSheetPointerHandlers(
 
   const ensureDraggingCapture = useCallback(
     (event: PointerEvent, state: SheetMachineState) => {
-      if (state.phase !== "dragging" || draggingRef.current) {
+      if (state.phase !== "dragging" || draggingCaptureRef.current) {
         return;
       }
 
-      draggingRef.current = true;
+      draggingCaptureRef.current = true;
+      promoteToDocumentPointerTracking();
       const captureTarget = captureTargetRef.current;
       if (captureTarget) {
         trySetPointerCapture(captureTarget, event.pointerId);
       }
     },
-    [],
+    [promoteToDocumentPointerTracking],
   );
 
-  const onDocumentPointerMove = useCallback(
+  const commitPendingGesture = useCallback(
+    (event: PointerEvent): boolean => {
+      const pending = pendingRef.current;
+      if (!pending || pending.pointerId !== event.pointerId) {
+        return false;
+      }
+
+      promoteToDocumentPointerTracking();
+
+      const downResult = dispatchRef.current({
+        type: "pointerDown",
+        pointerId: pending.pointerId,
+        clientY: pending.startClientY,
+        scrollTopPx: pending.scrollTopPx,
+        surface: pending.surface,
+      });
+
+      if (downResult.state.gesture === null) {
+        resetPointerSession(event.pointerId);
+        return false;
+      }
+
+      gestureStartVisibleHeightRef.current = downResult.state.visibleHeightPx;
+      committedRef.current = true;
+      pendingRef.current = null;
+
+      const moveResult = dispatchRef.current({
+        type: "pointerMove",
+        pointerId: event.pointerId,
+        clientY: event.clientY,
+        scrollTopPx: readScrollTopRef.current(),
+      });
+
+      ensureDraggingCapture(event, moveResult.state);
+      applyMoveResult(event, moveResult);
+      return true;
+    },
+    [
+      applyMoveResult,
+      ensureDraggingCapture,
+      promoteToDocumentPointerTracking,
+      resetPointerSession,
+    ],
+  );
+
+  const finishCommittedPointer = useCallback(
+    (event: PointerEvent) => {
+      if (!committedRef.current) {
+        return;
+      }
+
+      if (gestureHadEffectRef.current) {
+        event.preventDefault();
+      }
+
+      dispatchRef.current({
+        type: "pointerUp",
+        pointerId: event.pointerId,
+      });
+      scrollMomentumRef.current.releaseScrollMomentum();
+      resetPointerSession(event.pointerId);
+    },
+    [resetPointerSession],
+  );
+
+  const cancelPendingPointer = useCallback(
+    (event: PointerEvent) => {
+      if (committedRef.current) {
+        return;
+      }
+
+      resetPointerSession(event.pointerId);
+    },
+    [resetPointerSession],
+  );
+
+  const onPointerMove = useCallback(
     (event: PointerEvent) => {
       if (capturedPointerIdRef.current !== event.pointerId) {
+        return;
+      }
+
+      if (!committedRef.current) {
+        const pending = pendingRef.current;
+        if (!pending) {
+          return;
+        }
+
+        const deltaY = Math.abs(event.clientY - pending.startClientY);
+        if (deltaY < SHEET_AXIS_THRESHOLD_PX) {
+          return;
+        }
+
+        commitPendingGesture(event);
         return;
       }
 
@@ -165,27 +317,7 @@ export function useSheetPointerHandlers(
       ensureDraggingCapture(event, result.state);
       applyMoveResult(event, result);
     },
-    [applyMoveResult, ensureDraggingCapture],
-  );
-
-  const onDocumentPointerEnd = useCallback(
-    (event: PointerEvent) => {
-      if (capturedPointerIdRef.current !== event.pointerId) {
-        return;
-      }
-
-      if (draggingRef.current || gestureCommittedRef.current) {
-        event.preventDefault();
-      }
-
-      dispatchRef.current({
-        type: "pointerUp",
-        pointerId: event.pointerId,
-      });
-      scrollMomentumRef.current.releaseScrollMomentum();
-      endCapture(event.pointerId);
-    },
-    [endCapture],
+    [applyMoveResult, commitPendingGesture, ensureDraggingCapture],
   );
 
   const onPointerDown = useCallback(
@@ -195,44 +327,59 @@ export function useSheetPointerHandlers(
           return;
         }
 
-        scrollMomentumRef.current.cancelScrollMomentum();
-        scrollMomentumRef.current.clearScrollPointerTracking();
-        gestureCommittedRef.current = false;
-
-        const result = dispatchRef.current({
-          type: "pointerDown",
-          pointerId: event.pointerId,
-          clientY: event.clientY,
-          scrollTopPx: readScrollTopRef.current(),
-          surface,
-        });
-
-        capturedPointerIdRef.current = event.pointerId;
-        captureTargetRef.current = event.currentTarget;
-        draggingRef.current = result.state.phase === "dragging";
-        if (draggingRef.current) {
-          gestureCommittedRef.current = true;
-          event.preventDefault();
-          event.stopPropagation();
-          trySetPointerCapture(event.currentTarget, event.pointerId);
+        const phase = readMachinePhaseRef.current();
+        if (phase === "dragging" || phase === "settling") {
+          return;
         }
 
-        removeDocumentListeners();
+        scrollMomentumRef.current.cancelScrollMomentum();
+        scrollMomentumRef.current.clearScrollPointerTracking();
+
+        pendingRef.current = {
+          pointerId: event.pointerId,
+          startClientY: event.clientY,
+          scrollTopPx: readScrollTopRef.current(),
+          surface,
+        };
+        capturedPointerIdRef.current = event.pointerId;
+        captureTargetRef.current = event.currentTarget;
+        committedRef.current = false;
+        gestureHadEffectRef.current = false;
+
+        removePointerTracking();
+
         const move = (pointerEvent: PointerEvent) => {
-          onDocumentPointerMove(pointerEvent);
+          onPointerMove(pointerEvent);
         };
         const up = (pointerEvent: PointerEvent) => {
-          onDocumentPointerEnd(pointerEvent);
+          if (committedRef.current) {
+            finishCommittedPointer(pointerEvent);
+            return;
+          }
+          cancelPendingPointer(pointerEvent);
         };
-        documentListenersRef.current = { move, up };
-        document.addEventListener("pointermove", move);
-        document.addEventListener("pointerup", up);
-        document.addEventListener("pointercancel", up);
+
+        const surfaceTarget = event.currentTarget;
+        surfaceTarget.addEventListener("pointermove", move);
+        surfaceTarget.addEventListener("pointerup", up);
+        surfaceTarget.addEventListener("pointercancel", up);
+        trackingRef.current = {
+          move,
+          up,
+          moveOnDocument: false,
+          upOnDocument: false,
+          surfaceTarget,
+        };
       },
-    [onDocumentPointerEnd, onDocumentPointerMove, removeDocumentListeners],
+    [
+      cancelPendingPointer,
+      finishCommittedPointer,
+      onPointerMove,
+      removePointerTracking,
+    ],
   );
 
-  useEffect(() => () => removeDocumentListeners(), [removeDocumentListeners]);
+  useEffect(() => () => removePointerTracking(), [removePointerTracking]);
 
   return {
     onChromePointerDown: onPointerDown("chrome"),

@@ -7,6 +7,7 @@ import {
   type SheetMachineEvent,
   type SheetMachineResult,
   type SheetMachineState,
+  type SheetPhase,
 } from "../machine/sheet-machine";
 
 export type UseSheetMachineOptions = {
@@ -75,6 +76,7 @@ export function useSheetMachine({
   state: SheetMachineState | null;
   isReady: boolean;
   dispatch: (event: SheetMachineEvent) => SheetMachineResult;
+  readPhase: () => SheetPhase | null;
 } {
   const callbacksRef = useRef({ onSnapChange, onDragInteractionChange });
   callbacksRef.current = { onSnapChange, onDragInteractionChange };
@@ -129,5 +131,10 @@ export function useSheetMachine({
     dispatch({ type: "setSnap", snap: controlledSnap });
   }, [controlledSnap, dispatch]);
 
-  return { state, isReady: state !== null, dispatch };
+  return {
+    state,
+    isReady: state !== null,
+    dispatch,
+    readPhase: () => stateRef.current?.phase ?? null,
+  };
 }

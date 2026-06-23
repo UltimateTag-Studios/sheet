@@ -104,7 +104,7 @@ export function Sheet({
   const emitLayoutFrameChangeRef = useRef(emitLayoutFrameChange);
   emitLayoutFrameChangeRef.current = emitLayoutFrameChange;
 
-  const { state, isReady, dispatch } = useSheetMachine({
+  const { state, isReady, dispatch, readPhase } = useSheetMachine({
     restingSnap,
     controlledSnap: snap,
     onSnapChange,
@@ -161,6 +161,7 @@ export function Sheet({
   const pointerHandlers = useSheetPointerHandlers(
     dispatch,
     readScrollTop,
+    readPhase,
     applyBodyScrollDelta,
     scrollMomentum,
   );

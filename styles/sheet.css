@@ -92,19 +92,10 @@
   touch-action: none;
 }
 
-.sheet-chrome > * {
-  pointer-events: none;
-}
-
-/** Opt in on header content (or descendants) that must receive clicks/taps. */
-.sheet-header-interactive,
-.sheet-header-interactive * {
-  pointer-events: auto;
-}
-
-/** Opt in on body content (or descendants) that must receive clicks/taps. */
-.sheet-body-interactive,
-.sheet-body-interactive * {
+.sheet-header,
+.sheet-header *,
+.sheet-body-inner,
+.sheet-body-inner * {
   touch-action: manipulation;
 }
 
@@ -173,39 +164,6 @@
 .sheet-body-root--drag {
   overflow-y: hidden;
   touch-action: none;
-}
-
-.sheet-body-root--scroll
-  :is(
-    button,
-    a[href],
-    input,
-    textarea,
-    select,
-    label,
-    summary,
-    [role="button"],
-    [role="link"],
-    [role="tab"],
-    [role="menuitem"],
-    [data-sheet-interactive]
-  ),
-.sheet-body-root--drag
-  :is(
-    button,
-    a[href],
-    input,
-    textarea,
-    select,
-    label,
-    summary,
-    [role="button"],
-    [role="link"],
-    [role="tab"],
-    [role="menuitem"],
-    [data-sheet-interactive]
-  ) {
-  touch-action: manipulation;
 }
 
 .sheet-body-inner {

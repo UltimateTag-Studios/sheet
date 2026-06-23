@@ -293,7 +293,7 @@ function reducePointerDown(
   state: SheetMachineState,
   event: SheetMachinePointerDown,
 ): SheetMachineResult {
-  if (state.phase === "dragging") {
+  if (state.phase === "dragging" || state.phase === "settling") {
     return { state, effects: [] };
   }
 
@@ -307,8 +307,8 @@ function reducePointerDown(
     });
 
     return {
-      state: { ...state, phase: "dragging", gesture },
-      effects: [{ type: "notifyDragStart" }],
+      state: { ...state, phase: "idle", gesture },
+      effects: [],
     };
   }
 
@@ -333,7 +333,7 @@ function reducePointerDown(
   };
 }
 
-function reduceArmedBodyMove(
+function reduceArmedMove(
   state: SheetMachineState,
   event: SheetMachinePointerMove,
   gesture: SheetGesture,
@@ -370,8 +370,8 @@ function reducePointerMove(
     return { state, effects: [] };
   }
 
-  if (state.phase === "idle" && gesture.surface === "body") {
-    return reduceArmedBodyMove(state, event, gesture);
+  if (state.phase === "idle") {
+    return reduceArmedMove(state, event, gesture);
   }
 
   const effects: SheetMachineEffect[] = [];
@@ -519,6 +519,19 @@ function reducePointerUp(
   }
 
   if (gesture.intent !== "sheet") {
+    return {
+      state: { ...state, phase: "idle", gesture: null },
+      effects: [{ type: "notifyDragEnd" }],
+    };
+  }
+
+  const restingHeightPx = heightForSnap(
+    state.restingSnap,
+    state.collapsedHeightPx,
+    state.halfHeightPx,
+    state.fullHeightPx,
+  );
+  if (state.visibleHeightPx === restingHeightPx) {
     return {
       state: { ...state, phase: "idle", gesture: null },
       effects: [{ type: "notifyDragEnd" }],

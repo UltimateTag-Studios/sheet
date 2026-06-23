@@ -83,7 +83,7 @@ describe("reduceSheetMachine", () => {
     expect(result.effects).toEqual([]);
   });
 
-  it("captures chrome drag when body is scrolled at full height", () => {
+  it("arms chrome sheet intent without dragging until move slop", () => {
     const initial = createInitialSheetMachineState({
       restingSnap: "full",
       ...baseHeights,
@@ -97,10 +97,34 @@ describe("reduceSheetMachine", () => {
       surface: "chrome",
     });
 
-    expect(result.state.phase).toBe("dragging");
+    expect(result.state.phase).toBe("idle");
     expect(result.state.gesture?.intent).toBe("sheet");
     expect(result.state.gesture?.surface).toBe("chrome");
-    expect(result.effects).toContainEqual({ type: "notifyDragStart" });
+    expect(result.effects).toEqual([]);
+  });
+
+  it("clears armed chrome gesture on tap release without move", () => {
+    const initial = createInitialSheetMachineState({
+      restingSnap: "half",
+      ...baseHeights,
+    });
+
+    const armed = reduceSheetMachine(initial, {
+      type: "pointerDown",
+      pointerId: 1,
+      clientY: 400,
+      scrollTopPx: 0,
+      surface: "chrome",
+    }).state;
+
+    const result = reduceSheetMachine(armed, {
+      type: "pointerUp",
+      pointerId: 1,
+    });
+
+    expect(result.state.phase).toBe("idle");
+    expect(result.state.gesture).toBeNull();
+    expect(result.effects).toEqual([]);
   });
 
   it("keeps chrome drag when body remains scrolled during move", () => {
@@ -117,15 +141,49 @@ describe("reduceSheetMachine", () => {
       surface: "chrome",
     }).state;
 
-    const result = reduceSheetMachine(state, {
+    const slopCross = reduceSheetMachine(state, {
+      type: "pointerMove",
+      pointerId: 1,
+      clientY: 409,
+      scrollTopPx: 48,
+    });
+
+    expect(slopCross.state.phase).toBe("dragging");
+    expect(slopCross.effects).toContainEqual({ type: "notifyDragStart" });
+
+    const result = reduceSheetMachine(slopCross.state, {
       type: "pointerMove",
       pointerId: 1,
       clientY: 460,
       scrollTopPx: 48,
     });
 
+    expect(result.state.phase).toBe("dragging");
     expect(result.state.gesture?.intent).toBe("sheet");
     expect(result.state.visibleHeightPx).toBeLessThan(700);
+  });
+
+  it("ignores pointer down while settling", () => {
+    const initial = createInitialSheetMachineState({
+      restingSnap: "half",
+      ...baseHeights,
+    });
+    const settling = {
+      ...initial,
+      phase: "settling" as const,
+      visibleHeightPx: 500,
+    };
+
+    const result = reduceSheetMachine(settling, {
+      type: "pointerDown",
+      pointerId: 1,
+      clientY: 400,
+      scrollTopPx: 0,
+      surface: "body",
+    });
+
+    expect(result.state).toBe(settling);
+    expect(result.effects).toEqual([]);
   });
 
   it("enters pendingAxis at full height with scroll top", () => {
