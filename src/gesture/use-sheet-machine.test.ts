@@ -1,0 +1,56 @@
+import { act, renderHook } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
+
+import { useSheetMachine } from "./use-sheet-machine";
+
+describe("useSheetMachine", () => {
+  it("skips React sync on continuous drag pointerMove", () => {
+    let renderCount = 0;
+
+    const { result } = renderHook(() => {
+      renderCount += 1;
+      return useSheetMachine({ restingSnap: "half" });
+    });
+
+    act(() => {
+      result.current.dispatch({
+        type: "measure",
+        collapsedHeightPx: 80,
+        halfHeightPx: 400,
+        fullHeightPx: 800,
+      });
+    });
+
+    act(() => {
+      result.current.dispatch({
+        type: "pointerDown",
+        pointerId: 1,
+        clientY: 500,
+        scrollTopPx: 0,
+        surface: "chrome",
+      });
+      result.current.dispatch({
+        type: "pointerMove",
+        pointerId: 1,
+        clientY: 480,
+        scrollTopPx: 0,
+      });
+    });
+
+    const renderCountAfterDragStart = renderCount;
+
+    act(() => {
+      for (let clientY = 460; clientY >= 360; clientY -= 20) {
+        result.current.dispatch({
+          type: "pointerMove",
+          pointerId: 1,
+          clientY,
+          scrollTopPx: 0,
+        });
+      }
+    });
+
+    expect(renderCount).toBe(renderCountAfterDragStart);
+    expect(result.current.state?.phase).toBe("dragging");
+  });
+});

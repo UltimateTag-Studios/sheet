@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import { createInitialSheetMachineState } from "../machine/sheet-machine";
-import { visibleHeightMovedFromRestingSnap } from "./visible-height-moved-from-resting-snap";
+import { isVisibleHeightAtRestingSnap } from "./snap-math";
 
-describe("visibleHeightMovedFromRestingSnap", () => {
-  it("is false when visible height matches the resting snap", () => {
+describe("isVisibleHeightAtRestingSnap", () => {
+  it("is true when visible height matches the resting snap", () => {
     const state = createInitialSheetMachineState({
       restingSnap: "half",
       collapsedHeightPx: 80,
@@ -12,10 +12,10 @@ describe("visibleHeightMovedFromRestingSnap", () => {
       fullHeightPx: 800,
     });
 
-    expect(visibleHeightMovedFromRestingSnap(state)).toBe(false);
+    expect(isVisibleHeightAtRestingSnap(state)).toBe(true);
   });
 
-  it("is true when visible height differs from the resting snap", () => {
+  it("is false when visible height differs from the resting snap", () => {
     const state = {
       ...createInitialSheetMachineState({
         restingSnap: "full",
@@ -26,6 +26,6 @@ describe("visibleHeightMovedFromRestingSnap", () => {
       visibleHeightPx: 500,
     };
 
-    expect(visibleHeightMovedFromRestingSnap(state)).toBe(true);
+    expect(isVisibleHeightAtRestingSnap(state)).toBe(false);
   });
 });

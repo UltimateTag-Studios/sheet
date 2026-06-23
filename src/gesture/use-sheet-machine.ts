@@ -66,6 +66,18 @@ function ignoredGestureResult(restingSnap: SheetSnap): SheetMachineResult {
   };
 }
 
+function shouldSyncReactState(
+  event: SheetMachineEvent,
+  previous: SheetMachineState,
+  next: SheetMachineState,
+): boolean {
+  return !(
+    event.type === "pointerMove" &&
+    previous.phase === "dragging" &&
+    next.phase === "dragging"
+  );
+}
+
 export function useSheetMachine({
   restingSnap,
   controlledSnap,
@@ -104,11 +116,14 @@ export function useSheetMachine({
         return { state: initial, effects: [] };
       }
 
-      const result = reduceSheetMachine(stateRef.current, event);
+      const previous = stateRef.current;
+      const result = reduceSheetMachine(previous, event);
       applyEffects(result.effects, callbacksRef.current);
       stateRef.current = result.state;
       onResultRef.current?.(event, result);
-      setState(result.state);
+      if (shouldSyncReactState(event, previous, result.state)) {
+        setState(result.state);
+      }
 
       return result;
     },

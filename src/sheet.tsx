@@ -20,6 +20,7 @@ import type { SheetLayoutConfig } from "./layout/sheet-layout-vars";
 import { buildSheetLayoutVars } from "./layout/sheet-layout-vars";
 import { readVisibleSheetHeightPx } from "./layout/snap-heights";
 import type { SheetSnap } from "./layout/snap-math";
+import { applySheetSlideFrame } from "./layout/sync-sheet-dom-frame";
 import type { SheetSnapHeights } from "./layout/use-snap-heights";
 import type { SheetMachineState } from "./machine/sheet-machine";
 
@@ -75,6 +76,9 @@ export function Sheet({
   const sheetSlideRef = useRef<HTMLDivElement | null>(null);
   const bodyRootRef = useRef<HTMLDivElement | null>(null);
   const canBodyScrollRef = useRef(false);
+  const setCanBodyScrollEnabledRef = useRef<
+    (value: boolean | ((current: boolean) => boolean)) => void
+  >(() => {});
   const onLayoutMeasureRef = useRef<
     ((heights: SheetSnapHeights) => void) | undefined
   >(undefined);
@@ -110,9 +114,31 @@ export function Sheet({
     onSnapChange,
     onDragInteractionChange,
     onResult: (event, result) => {
-      if (event.type === "pointerMove" && result.state.phase === "dragging") {
-        emitLayoutFrameChangeRef.current(result.state);
+      if (event.type !== "pointerMove" || result.state.phase !== "dragging") {
+        return;
       }
+
+      const slide = sheetSlideRef.current;
+      if (slide) {
+        applySheetSlideFrame(
+          slide,
+          result.state.visibleHeightPx,
+          "dragging",
+          false,
+        );
+      }
+      emitLayoutFrameChangeRef.current(result.state);
+
+      const nextCanBodyScroll = canBodyScroll({
+        sheetSnap: result.state.restingSnap,
+        visibleHeightPx: result.state.visibleHeightPx,
+        fullHeightPx: result.state.fullHeightPx,
+        isDragging: true,
+      });
+      canBodyScrollRef.current = nextCanBodyScroll;
+      setCanBodyScrollEnabledRef.current((current) =>
+        current === nextCanBodyScroll ? current : nextCanBodyScroll,
+      );
     },
   });
 
@@ -197,6 +223,7 @@ export function Sheet({
   });
 
   const [canBodyScrollEnabled, setCanBodyScrollEnabled] = useState(false);
+  setCanBodyScrollEnabledRef.current = setCanBodyScrollEnabled;
 
   useEffect(() => {
     if (!state) {

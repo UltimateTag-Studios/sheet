@@ -28,6 +28,28 @@ export function heightForSnap(
   return fullHeightPx;
 }
 
+export type VisibleHeightSnapHeights = {
+  visibleHeightPx: number;
+  restingSnap: SheetSnap;
+  collapsedHeightPx: number;
+  halfHeightPx: number;
+  fullHeightPx: number;
+};
+
+export function isVisibleHeightAtRestingSnap(
+  state: VisibleHeightSnapHeights,
+): boolean {
+  return (
+    state.visibleHeightPx ===
+    heightForSnap(
+      state.restingSnap,
+      state.collapsedHeightPx,
+      state.halfHeightPx,
+      state.fullHeightPx,
+    )
+  );
+}
+
 export type SheetSnap = "collapsed" | "half" | "full";
 
 export function snapFromHeight(

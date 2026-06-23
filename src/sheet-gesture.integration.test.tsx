@@ -328,18 +328,7 @@ function stubScrollRootDimensions(
   });
 }
 
-type PointerSession = {
-  startClientY: number;
-  committed: boolean;
-};
-
-const pointerSessions = new Map<number, PointerSession>();
-
 function pointerDown(surface: Element, pointerId: number, clientY: number) {
-  pointerSessions.set(pointerId, {
-    startClientY: clientY,
-    committed: false,
-  });
   act(() => {
     fireEvent.pointerDown(surface, {
       pointerId,
@@ -350,7 +339,6 @@ function pointerDown(surface: Element, pointerId: number, clientY: number) {
 }
 
 function pointerMove(pointerId: number, clientY: number) {
-  const session = pointerSessions.get(pointerId);
   act(() => {
     document.dispatchEvent(
       new PointerEvent("pointermove", {
@@ -359,13 +347,6 @@ function pointerMove(pointerId: number, clientY: number) {
         bubbles: true,
       }),
     );
-    if (
-      session &&
-      !session.committed &&
-      Math.abs(clientY - session.startClientY) >= 8
-    ) {
-      session.committed = true;
-    }
   });
 }
 
@@ -378,7 +359,6 @@ function pointerUp(pointerId: number, clientY: number) {
         bubbles: true,
       }),
     );
-    pointerSessions.delete(pointerId);
   });
 }
 

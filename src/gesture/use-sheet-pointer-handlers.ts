@@ -5,6 +5,7 @@ import {
   useRef,
 } from "react";
 
+import { isVisibleHeightAtRestingSnap } from "../layout/snap-math";
 import type {
   SheetMachineEvent,
   SheetMachineResult,
@@ -12,7 +13,6 @@ import type {
   SheetPointerSurface,
 } from "../machine/sheet-machine";
 import { SHEET_AXIS_THRESHOLD_PX } from "../machine/sheet-machine";
-import { visibleHeightMovedFromRestingSnap } from "./visible-height-moved-from-resting-snap";
 
 export type SheetPointerHandlers = {
   onChromePointerDown: (event: ReactPointerEvent<HTMLElement>) => void;
@@ -114,7 +114,7 @@ export function useSheetPointerHandlers(
       if (scrollDeltaPx !== 0) {
         applyBodyScrollDeltaRef.current(scrollDeltaPx);
         session.hadEffect = true;
-      } else if (visibleHeightMovedFromRestingSnap(result.state)) {
+      } else if (!isVisibleHeightAtRestingSnap(result.state)) {
         session.hadEffect = true;
       }
 

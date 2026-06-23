@@ -4,6 +4,7 @@ import {
 } from "../layout/scroll-mode";
 import {
   heightForSnap,
+  isVisibleHeightAtRestingSnap,
   nearestSnapHeight,
   type SheetSnap,
   snapHeightFromPanDelta,
@@ -525,13 +526,7 @@ function reducePointerUp(
     };
   }
 
-  const restingHeightPx = heightForSnap(
-    state.restingSnap,
-    state.collapsedHeightPx,
-    state.halfHeightPx,
-    state.fullHeightPx,
-  );
-  if (state.visibleHeightPx === restingHeightPx) {
+  if (isVisibleHeightAtRestingSnap(state)) {
     return {
       state: { ...state, phase: "idle", gesture: null },
       effects: [{ type: "notifyDragEnd" }],
