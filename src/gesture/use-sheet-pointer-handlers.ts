@@ -20,19 +20,47 @@ export type SheetPointerHandlers = {
   onBodyPointerDown: (event: ReactPointerEvent<HTMLElement>) => void;
 };
 
-type PendingPointer = {
-  pointerId: number;
-  startClientY: number;
-  scrollTopPx: number;
-  surface: SheetPointerSurface;
-};
-
 type PointerTracking = {
   move: (event: PointerEvent) => void;
   up: (event: PointerEvent) => void;
 };
 
+type PointerSession = {
+  pointerId: number;
+  tapTarget: EventTarget;
+  startClientY: number;
+  scrollTopPx: number;
+  surface: SheetPointerSurface;
+  committed: boolean;
+  hadEffect: boolean;
+  tracking: PointerTracking;
+};
+
 const POINTER_UP_LISTENER_OPTS: AddEventListenerOptions = { capture: true };
+
+function detachDocumentTracking(tracking: PointerTracking): void {
+  document.removeEventListener("pointermove", tracking.move);
+  document.removeEventListener(
+    "pointerup",
+    tracking.up,
+    POINTER_UP_LISTENER_OPTS,
+  );
+  document.removeEventListener(
+    "pointercancel",
+    tracking.up,
+    POINTER_UP_LISTENER_OPTS,
+  );
+}
+
+function attachDocumentTracking(tracking: PointerTracking): void {
+  document.addEventListener("pointermove", tracking.move);
+  document.addEventListener("pointerup", tracking.up, POINTER_UP_LISTENER_OPTS);
+  document.addEventListener(
+    "pointercancel",
+    tracking.up,
+    POINTER_UP_LISTENER_OPTS,
+  );
+}
 
 /**
  * Tap vs drag on chrome and body:
@@ -53,12 +81,7 @@ export function useSheetPointerHandlers(
     clearScrollPointerTracking: () => void;
   },
 ): SheetPointerHandlers {
-  const pendingRef = useRef<PendingPointer | null>(null);
-  const activePointerIdRef = useRef<number | null>(null);
-  const tapTargetRef = useRef<EventTarget | null>(null);
-  const committedRef = useRef(false);
-  const gestureHadEffectRef = useRef(false);
-  const trackingRef = useRef<PointerTracking | null>(null);
+  const sessionRef = useRef<PointerSession | null>(null);
   const dispatchRef = useRef(dispatch);
   const readScrollTopRef = useRef(readScrollTop);
   const readMachinePhaseRef = useRef(readMachinePhase);
@@ -71,45 +94,29 @@ export function useSheetPointerHandlers(
   applyBodyScrollDeltaRef.current = applyBodyScrollDelta;
   scrollMomentumRef.current = scrollMomentum;
 
-  const removePointerTracking = useCallback(() => {
-    const tracking = trackingRef.current;
-    if (!tracking) {
-      return;
+  const endPointerSession = useCallback(() => {
+    const session = sessionRef.current;
+    if (session) {
+      detachDocumentTracking(session.tracking);
     }
-
-    document.removeEventListener("pointermove", tracking.move);
-    document.removeEventListener(
-      "pointerup",
-      tracking.up,
-      POINTER_UP_LISTENER_OPTS,
-    );
-    document.removeEventListener(
-      "pointercancel",
-      tracking.up,
-      POINTER_UP_LISTENER_OPTS,
-    );
-    trackingRef.current = null;
+    sessionRef.current = null;
   }, []);
-
-  const resetPointerSession = useCallback(() => {
-    removePointerTracking();
-    pendingRef.current = null;
-    tapTargetRef.current = null;
-    activePointerIdRef.current = null;
-    committedRef.current = false;
-    gestureHadEffectRef.current = false;
-  }, [removePointerTracking]);
 
   const applyMoveResult = useCallback(
     (event: PointerEvent, result: SheetMachineResult) => {
+      const session = sessionRef.current;
+      if (!session) {
+        return;
+      }
+
       const intent = result.state.gesture?.intent;
       const scrollDeltaPx = result.bodyScrollDeltaPx ?? 0;
 
       if (scrollDeltaPx !== 0) {
         applyBodyScrollDeltaRef.current(scrollDeltaPx);
-        gestureHadEffectRef.current = true;
+        session.hadEffect = true;
       } else if (visibleHeightMovedFromRestingSnap(result.state)) {
-        gestureHadEffectRef.current = true;
+        session.hadEffect = true;
       }
 
       if (intent === "scroll") {
@@ -121,7 +128,7 @@ export function useSheetPointerHandlers(
       if (
         result.state.phase === "dragging" &&
         (intent === "sheet" || intent === "scroll") &&
-        gestureHadEffectRef.current
+        session.hadEffect
       ) {
         event.preventDefault();
       }
@@ -131,26 +138,25 @@ export function useSheetPointerHandlers(
 
   const commitPendingGesture = useCallback(
     (event: PointerEvent): boolean => {
-      const pending = pendingRef.current;
-      if (!pending || pending.pointerId !== event.pointerId) {
+      const session = sessionRef.current;
+      if (!session || session.pointerId !== event.pointerId) {
         return false;
       }
 
       const downResult = dispatchRef.current({
         type: "pointerDown",
-        pointerId: pending.pointerId,
-        clientY: pending.startClientY,
-        scrollTopPx: pending.scrollTopPx,
-        surface: pending.surface,
+        pointerId: session.pointerId,
+        clientY: session.startClientY,
+        scrollTopPx: session.scrollTopPx,
+        surface: session.surface,
       });
 
       if (downResult.state.gesture === null) {
-        resetPointerSession();
+        endPointerSession();
         return false;
       }
 
-      committedRef.current = true;
-      pendingRef.current = null;
+      session.committed = true;
 
       const moveResult = dispatchRef.current({
         type: "pointerMove",
@@ -162,14 +168,17 @@ export function useSheetPointerHandlers(
       applyMoveResult(event, moveResult);
       return true;
     },
-    [applyMoveResult, resetPointerSession],
+    [applyMoveResult, endPointerSession],
   );
 
   const finishPointer = useCallback(
     (event: PointerEvent) => {
-      const hadEffect = gestureHadEffectRef.current;
-      const tapTarget = tapTargetRef.current;
-      const wasCommitted = committedRef.current;
+      const session = sessionRef.current;
+      if (!session) {
+        return;
+      }
+
+      const { hadEffect, tapTarget, committed: wasCommitted } = session;
 
       event.preventDefault();
 
@@ -181,28 +190,24 @@ export function useSheetPointerHandlers(
         scrollMomentumRef.current.releaseScrollMomentum();
       }
 
-      resetPointerSession();
+      endPointerSession();
 
       if (!hadEffect) {
         activatePointerDownTarget(tapTarget);
       }
     },
-    [resetPointerSession],
+    [endPointerSession],
   );
 
   const onPointerMove = useCallback(
     (event: PointerEvent) => {
-      if (activePointerIdRef.current !== event.pointerId) {
+      const session = sessionRef.current;
+      if (!session || session.pointerId !== event.pointerId) {
         return;
       }
 
-      if (!committedRef.current) {
-        const pending = pendingRef.current;
-        if (!pending) {
-          return;
-        }
-
-        const deltaY = Math.abs(event.clientY - pending.startClientY);
+      if (!session.committed) {
+        const deltaY = Math.abs(event.clientY - session.startClientY);
         if (deltaY < SHEET_AXIS_THRESHOLD_PX) {
           return;
         }
@@ -237,19 +242,7 @@ export function useSheetPointerHandlers(
 
         scrollMomentumRef.current.cancelScrollMomentum();
         scrollMomentumRef.current.clearScrollPointerTracking();
-
-        pendingRef.current = {
-          pointerId: event.pointerId,
-          startClientY: event.clientY,
-          scrollTopPx: readScrollTopRef.current(),
-          surface,
-        };
-        tapTargetRef.current = event.target;
-        activePointerIdRef.current = event.pointerId;
-        committedRef.current = false;
-        gestureHadEffectRef.current = false;
-
-        removePointerTracking();
+        endPointerSession();
 
         const move = (pointerEvent: PointerEvent) => {
           onPointerMove(pointerEvent);
@@ -257,20 +250,24 @@ export function useSheetPointerHandlers(
         const up = (pointerEvent: PointerEvent) => {
           finishPointer(pointerEvent);
         };
+        const tracking = { move, up };
 
-        document.addEventListener("pointermove", move);
-        document.addEventListener("pointerup", up, POINTER_UP_LISTENER_OPTS);
-        document.addEventListener(
-          "pointercancel",
-          up,
-          POINTER_UP_LISTENER_OPTS,
-        );
-        trackingRef.current = { move, up };
+        attachDocumentTracking(tracking);
+        sessionRef.current = {
+          pointerId: event.pointerId,
+          tapTarget: event.target,
+          startClientY: event.clientY,
+          scrollTopPx: readScrollTopRef.current(),
+          surface,
+          committed: false,
+          hadEffect: false,
+          tracking,
+        };
       },
-    [finishPointer, onPointerMove, removePointerTracking],
+    [endPointerSession, finishPointer, onPointerMove],
   );
 
-  useEffect(() => () => removePointerTracking(), [removePointerTracking]);
+  useEffect(() => () => endPointerSession(), [endPointerSession]);
 
   return {
     onChromePointerDown: onPointerDown("chrome"),
