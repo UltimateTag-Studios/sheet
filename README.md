@@ -55,7 +55,7 @@ function Demo() {
 
 ### Tap vs drag
 
-The gesture machine distinguishes **tap** from **drag** using move slop (8px) on every surface — handle, header, and body. A tap never reaches the machine: pointer routing holds a pending gesture in refs until slop commits, then dispatches `pointerDown` + `pointerMove`. On release without slop, the router calls `click()` on the element that was pressed (so buttons work on the first tap even when the browser does not synthesize a click).
+The gesture machine distinguishes **tap** from **drag** using move slop (8px) on every surface — handle, header, and body. A tap never reaches the machine unless move slop commits; on release without a real drag effect, the router calls `click()` on the element that was pressed.
 
 - **Chrome** (handle + header): drag past slop always resizes the sheet.
 - **Body below full height**: drag past slop resizes the sheet.

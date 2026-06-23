@@ -329,7 +329,6 @@ function stubScrollRootDimensions(
 }
 
 type PointerSession = {
-  surface: Element;
   startClientY: number;
   committed: boolean;
 };
@@ -338,7 +337,6 @@ const pointerSessions = new Map<number, PointerSession>();
 
 function pointerDown(surface: Element, pointerId: number, clientY: number) {
   pointerSessions.set(pointerId, {
-    surface,
     startClientY: clientY,
     committed: false,
   });
@@ -354,10 +352,7 @@ function pointerDown(surface: Element, pointerId: number, clientY: number) {
 function pointerMove(pointerId: number, clientY: number) {
   const session = pointerSessions.get(pointerId);
   act(() => {
-    const target = session?.committed
-      ? document
-      : (session?.surface ?? document);
-    target.dispatchEvent(
+    document.dispatchEvent(
       new PointerEvent("pointermove", {
         pointerId,
         clientY,
@@ -375,12 +370,8 @@ function pointerMove(pointerId: number, clientY: number) {
 }
 
 function pointerUp(pointerId: number, clientY: number) {
-  const session = pointerSessions.get(pointerId);
   act(() => {
-    const target = session?.committed
-      ? document
-      : (session?.surface ?? document);
-    target.dispatchEvent(
+    document.dispatchEvent(
       new PointerEvent("pointerup", {
         pointerId,
         clientY,
@@ -863,7 +854,7 @@ describe("Sheet gesture integration", () => {
       expect(sheetPhase()).toBe("idle");
     });
 
-    it("does not activate a row when jitter crosses slop without sheet effect", () => {
+    it("activates a row when jitter crosses slop without sheet effect", () => {
       renderWithHost(<TestFullSheetWithButtonList />);
 
       const row = screen.getByTestId("row-1");
@@ -871,7 +862,7 @@ describe("Sheet gesture integration", () => {
       pointerMove(35, 508);
       pointerUp(35, 508);
 
-      expect(screen.getByTestId("last-tapped-row").textContent).toBe("none");
+      expect(screen.getByTestId("last-tapped-row").textContent).toBe("1");
       expect(sheetPhase()).toBe("idle");
     });
 
