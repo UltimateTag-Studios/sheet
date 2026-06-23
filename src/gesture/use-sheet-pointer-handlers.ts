@@ -8,7 +8,6 @@ import {
 import type {
   SheetMachineEvent,
   SheetMachineResult,
-  SheetMachineState,
   SheetPhase,
   SheetPointerSurface,
 } from "../machine/sheet-machine";
@@ -36,36 +35,7 @@ type PointerTracking = {
   surfaceTarget: HTMLElement | null;
 };
 
-function trySetPointerCapture(target: HTMLElement, pointerId: number): void {
-  if (typeof target.setPointerCapture !== "function") {
-    return;
-  }
-
-  try {
-    target.setPointerCapture(pointerId);
-  } catch {
-    // Some test environments stub elements without full pointer capture support.
-  }
-}
-
-function tryReleasePointerCapture(
-  target: HTMLElement,
-  pointerId: number,
-): void {
-  if (
-    typeof target.hasPointerCapture !== "function" ||
-    typeof target.releasePointerCapture !== "function" ||
-    !target.hasPointerCapture(pointerId)
-  ) {
-    return;
-  }
-
-  try {
-    target.releasePointerCapture(pointerId);
-  } catch {
-    // Ignore release failures during teardown.
-  }
-}
+const POINTER_UP_LISTENER_OPTS: AddEventListenerOptions = { capture: true };
 
 /**
  * Tap vs drag on chrome and body:
@@ -87,12 +57,11 @@ export function useSheetPointerHandlers(
   },
 ): SheetPointerHandlers {
   const pendingRef = useRef<PendingPointer | null>(null);
-  const capturedPointerIdRef = useRef<number | null>(null);
-  const captureTargetRef = useRef<HTMLElement | null>(null);
+  const activePointerIdRef = useRef<number | null>(null);
+  const surfaceTargetRef = useRef<HTMLElement | null>(null);
   const committedRef = useRef(false);
   const gestureHadEffectRef = useRef(false);
   const gestureStartVisibleHeightRef = useRef<number | null>(null);
-  const draggingCaptureRef = useRef(false);
   const trackingRef = useRef<PointerTracking | null>(null);
   const dispatchRef = useRef(dispatch);
   const readScrollTopRef = useRef(readScrollTop);
@@ -112,8 +81,6 @@ export function useSheetPointerHandlers(
       return;
     }
 
-    const captureOpts: AddEventListenerOptions = { capture: true };
-
     if (tracking.moveOnDocument) {
       document.removeEventListener("pointermove", tracking.move);
     } else if (tracking.surfaceTarget) {
@@ -121,66 +88,76 @@ export function useSheetPointerHandlers(
     }
 
     if (tracking.upOnDocument) {
-      document.removeEventListener("pointerup", tracking.up, captureOpts);
-      document.removeEventListener("pointercancel", tracking.up, captureOpts);
+      document.removeEventListener(
+        "pointerup",
+        tracking.up,
+        POINTER_UP_LISTENER_OPTS,
+      );
+      document.removeEventListener(
+        "pointercancel",
+        tracking.up,
+        POINTER_UP_LISTENER_OPTS,
+      );
     } else if (tracking.surfaceTarget) {
       tracking.surfaceTarget.removeEventListener(
         "pointerup",
         tracking.up,
-        captureOpts,
+        POINTER_UP_LISTENER_OPTS,
       );
       tracking.surfaceTarget.removeEventListener(
         "pointercancel",
         tracking.up,
-        captureOpts,
+        POINTER_UP_LISTENER_OPTS,
       );
     }
 
     trackingRef.current = null;
   }, []);
 
-  const resetPointerSession = useCallback(
-    (pointerId: number) => {
-      const captureTarget = captureTargetRef.current;
-      if (captureTarget) {
-        tryReleasePointerCapture(captureTarget, pointerId);
-      }
-      pendingRef.current = null;
-      captureTargetRef.current = null;
-      capturedPointerIdRef.current = null;
-      committedRef.current = false;
-      gestureHadEffectRef.current = false;
-      gestureStartVisibleHeightRef.current = null;
-      draggingCaptureRef.current = false;
-      removePointerTracking();
-    },
-    [removePointerTracking],
-  );
+  const resetPointerSession = useCallback(() => {
+    pendingRef.current = null;
+    surfaceTargetRef.current = null;
+    activePointerIdRef.current = null;
+    committedRef.current = false;
+    gestureHadEffectRef.current = false;
+    gestureStartVisibleHeightRef.current = null;
+    removePointerTracking();
+  }, [removePointerTracking]);
 
   const promoteToDocumentPointerTracking = useCallback(() => {
     const tracking = trackingRef.current;
-    const captureTarget = captureTargetRef.current;
-    if (!tracking || !captureTarget) {
+    const surfaceTarget = surfaceTargetRef.current;
+    if (!tracking || !surfaceTarget) {
       return;
     }
 
-    const captureOpts: AddEventListenerOptions = { capture: true };
-
     if (!tracking.moveOnDocument) {
-      captureTarget.removeEventListener("pointermove", tracking.move);
+      surfaceTarget.removeEventListener("pointermove", tracking.move);
       document.addEventListener("pointermove", tracking.move);
       tracking.moveOnDocument = true;
     }
 
     if (!tracking.upOnDocument) {
-      captureTarget.removeEventListener("pointerup", tracking.up, captureOpts);
-      captureTarget.removeEventListener(
+      surfaceTarget.removeEventListener(
+        "pointerup",
+        tracking.up,
+        POINTER_UP_LISTENER_OPTS,
+      );
+      surfaceTarget.removeEventListener(
         "pointercancel",
         tracking.up,
-        captureOpts,
+        POINTER_UP_LISTENER_OPTS,
       );
-      document.addEventListener("pointerup", tracking.up, captureOpts);
-      document.addEventListener("pointercancel", tracking.up, captureOpts);
+      document.addEventListener(
+        "pointerup",
+        tracking.up,
+        POINTER_UP_LISTENER_OPTS,
+      );
+      document.addEventListener(
+        "pointercancel",
+        tracking.up,
+        POINTER_UP_LISTENER_OPTS,
+      );
       tracking.upOnDocument = true;
       tracking.surfaceTarget = null;
     }
@@ -218,22 +195,6 @@ export function useSheetPointerHandlers(
     [],
   );
 
-  const ensureDraggingCapture = useCallback(
-    (event: PointerEvent, state: SheetMachineState) => {
-      if (state.phase !== "dragging" || draggingCaptureRef.current) {
-        return;
-      }
-
-      draggingCaptureRef.current = true;
-      promoteToDocumentPointerTracking();
-      const captureTarget = captureTargetRef.current;
-      if (captureTarget) {
-        trySetPointerCapture(captureTarget, event.pointerId);
-      }
-    },
-    [promoteToDocumentPointerTracking],
-  );
-
   const commitPendingGesture = useCallback(
     (event: PointerEvent): boolean => {
       const pending = pendingRef.current;
@@ -252,7 +213,7 @@ export function useSheetPointerHandlers(
       });
 
       if (downResult.state.gesture === null) {
-        resetPointerSession(event.pointerId);
+        resetPointerSession();
         return false;
       }
 
@@ -267,16 +228,10 @@ export function useSheetPointerHandlers(
         scrollTopPx: readScrollTopRef.current(),
       });
 
-      ensureDraggingCapture(event, moveResult.state);
       applyMoveResult(event, moveResult);
       return true;
     },
-    [
-      applyMoveResult,
-      ensureDraggingCapture,
-      promoteToDocumentPointerTracking,
-      resetPointerSession,
-    ],
+    [applyMoveResult, promoteToDocumentPointerTracking, resetPointerSession],
   );
 
   const finishCommittedPointer = useCallback(
@@ -294,7 +249,7 @@ export function useSheetPointerHandlers(
         pointerId: event.pointerId,
       });
       scrollMomentumRef.current.releaseScrollMomentum();
-      resetPointerSession(event.pointerId);
+      resetPointerSession();
     },
     [resetPointerSession],
   );
@@ -307,7 +262,7 @@ export function useSheetPointerHandlers(
 
       const tapTarget = pendingRef.current?.tapTarget ?? null;
       event.preventDefault();
-      resetPointerSession(event.pointerId);
+      resetPointerSession();
       activatePointerDownTarget(tapTarget);
     },
     [resetPointerSession],
@@ -315,7 +270,7 @@ export function useSheetPointerHandlers(
 
   const onPointerMove = useCallback(
     (event: PointerEvent) => {
-      if (capturedPointerIdRef.current !== event.pointerId) {
+      if (activePointerIdRef.current !== event.pointerId) {
         return;
       }
 
@@ -341,10 +296,9 @@ export function useSheetPointerHandlers(
         scrollTopPx: readScrollTopRef.current(),
       });
 
-      ensureDraggingCapture(event, result.state);
       applyMoveResult(event, result);
     },
-    [applyMoveResult, commitPendingGesture, ensureDraggingCapture],
+    [applyMoveResult, commitPendingGesture],
   );
 
   const onPointerDown = useCallback(
@@ -369,8 +323,8 @@ export function useSheetPointerHandlers(
           surface,
           tapTarget: event.target,
         };
-        capturedPointerIdRef.current = event.pointerId;
-        captureTargetRef.current = event.currentTarget;
+        activePointerIdRef.current = event.pointerId;
+        surfaceTargetRef.current = event.currentTarget;
         committedRef.current = false;
         gestureHadEffectRef.current = false;
 
@@ -387,11 +341,18 @@ export function useSheetPointerHandlers(
           cancelPendingPointer(pointerEvent);
         };
 
-        const captureOpts: AddEventListenerOptions = { capture: true };
         const surfaceTarget = event.currentTarget;
         surfaceTarget.addEventListener("pointermove", move);
-        surfaceTarget.addEventListener("pointerup", up, captureOpts);
-        surfaceTarget.addEventListener("pointercancel", up, captureOpts);
+        surfaceTarget.addEventListener(
+          "pointerup",
+          up,
+          POINTER_UP_LISTENER_OPTS,
+        );
+        surfaceTarget.addEventListener(
+          "pointercancel",
+          up,
+          POINTER_UP_LISTENER_OPTS,
+        );
         trackingRef.current = {
           move,
           up,
