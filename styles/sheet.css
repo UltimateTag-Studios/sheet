@@ -1,8 +1,27 @@
 /*
  * @siegetag/sheet — layout + semantic surfaces.
  * Import once: import "@siegetag/sheet/styles.css"
- * Override theme tokens (radius, border, background) in your app.
+ * Override theme tokens in your app CSS (see SHEET_THEME_VARS).
  */
+
+.sheet-host[data-sheet-theme="light"] {
+  --sheet-color-text: #171717;
+  --sheet-color-surface-background: rgba(255, 255, 255, 0.92);
+  --sheet-color-surface-border: rgba(0, 0, 0, 0.08);
+  --sheet-color-surface-shadow: 0 -4px 24px rgba(0, 0, 0, 0.08);
+  --sheet-color-handle: rgba(0, 0, 0, 0.15);
+  --sheet-color-divider: rgba(0, 0, 0, 0.08);
+}
+
+.sheet-host[data-sheet-theme="dark"] {
+  --sheet-color-text: #fafafa;
+  --sheet-color-surface-background: rgba(23, 23, 23, 0.92);
+  --sheet-color-surface-border: rgba(255, 255, 255, 0.08);
+  --sheet-color-surface-shadow: 0 -4px 24px rgba(0, 0, 0, 0.35);
+  --sheet-color-handle: rgba(255, 255, 255, 0.25);
+  --sheet-color-divider: rgba(255, 255, 255, 0.08);
+}
+
 .sheet-host {
   position: relative;
   width: 100%;
@@ -12,15 +31,6 @@
 }
 
 .sheet {
-  --sheet-handle-margin-top: 0.75rem;
-  --sheet-handle-bar-height: 0.25rem;
-  --sheet-handle-margin-bottom: 0.75rem;
-  --sheet-handle-height: calc(
-    var(--sheet-handle-margin-top) +
-    var(--sheet-handle-bar-height) +
-    var(--sheet-handle-margin-bottom)
-  );
-
   position: absolute;
   inset-inline: 0;
   top: 0;
@@ -31,6 +41,10 @@
 }
 
 .sheet-slide {
+  --sheet-handle-margin-top: 0.75rem;
+  --sheet-handle-bar-height: 0.25rem;
+  --sheet-handle-margin-bottom: 0.75rem;
+
   position: absolute;
   inset-inline: 0;
   bottom: 0;
@@ -39,14 +53,17 @@
   max-height: 100%;
   pointer-events: auto;
   outline: none;
+  color: var(--sheet-color-text);
 
   border-top-left-radius: var(--sheet-border-radius, 0.75rem);
   border-top-right-radius: var(--sheet-border-radius, 0.75rem);
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-width: var(--sheet-border-width, 1px);
+  border-style: solid;
+  border-color: var(--sheet-color-surface-border);
   border-bottom: none;
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.08);
-  backdrop-filter: blur(24px);
+  background: var(--sheet-color-surface-background);
+  box-shadow: var(--sheet-color-surface-shadow);
+  backdrop-filter: blur(var(--sheet-backdrop-blur, 24px));
 }
 
 .sheet[data-sheet-phase="dragging"] .sheet-slide {
@@ -97,21 +114,27 @@
   padding-block: var(--sheet-header-padding-block, 0);
 }
 
-.sheet-handle {
+.sheet-handle,
+.sheet-handle-spacer {
+  box-sizing: content-box;
   margin-top: var(--sheet-handle-margin-top);
   margin-bottom: var(--sheet-handle-margin-bottom);
-  margin-inline: auto;
-  flex-shrink: 0;
   height: var(--sheet-handle-bar-height);
+  flex-shrink: 0;
+}
+
+.sheet-handle {
+  margin-inline: auto;
   width: var(--sheet-handle-width, 2.5rem);
-  border-radius: 9999px;
-  background: rgba(0, 0, 0, 0.15);
+  border-radius: var(--sheet-handle-border-radius, 9999px);
+  background: var(--sheet-color-handle);
 }
 
 .sheet-divider {
   margin-inline: var(--sheet-divider-padding-inline, 0);
   margin-block: var(--sheet-divider-padding-block, 0);
-  border-bottom: var(--sheet-divider-height, 1px) solid rgba(0, 0, 0, 0.08);
+  border-bottom: var(--sheet-divider-height, 1px) solid
+    var(--sheet-color-divider);
 }
 
 .sheet[data-sheet-collapsed-header] .sheet-divider {
@@ -133,8 +156,7 @@
 
 /** Mirrors handle block below header content for vertical balance with the handle bar. */
 .sheet-handle-spacer {
-  flex-shrink: 0;
-  height: var(--sheet-handle-height);
+  width: 0;
 }
 
 .sheet-body-root {
@@ -193,19 +215,4 @@
   gap: var(--sheet-body-gap, 0);
   padding-inline: var(--sheet-body-padding-inline, 0);
   padding-block: var(--sheet-body-padding-block, 0);
-}
-
-[data-sheet-theme="dark"] .sheet-slide {
-  border-color: rgba(255, 255, 255, 0.08);
-  background: rgba(23, 23, 23, 0.92);
-  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.35);
-  color: #fafafa;
-}
-
-[data-sheet-theme="dark"] .sheet-handle {
-  background: rgba(255, 255, 255, 0.25);
-}
-
-[data-sheet-theme="dark"] .sheet-divider {
-  border-bottom-color: rgba(255, 255, 255, 0.08);
 }

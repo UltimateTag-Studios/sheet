@@ -2,13 +2,13 @@ import type { ReactNode } from "react";
 import { createContext, useContext } from "react";
 
 import type { SheetPointerHandlers } from "../gesture/use-sheet-pointer-handlers";
-import type { SheetLayout } from "../layout/sheet-layout-vars";
+import type { SheetLayoutConfig } from "../layout/sheet-layout-vars";
 import type { SheetSnap } from "../layout/snap-math";
 
 /** Stable layout wiring — does not change during drag frames. */
 export type SheetControlsContextValue = {
   pointerHandlers: SheetPointerHandlers;
-  layout: SheetLayout;
+  layout: SheetLayoutConfig;
   canBodyScroll: boolean;
   registerBodyEl: (node: HTMLDivElement | null) => void;
   registerChromeMeasure: (node: HTMLElement | null) => void;

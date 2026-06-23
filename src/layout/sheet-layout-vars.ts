@@ -4,7 +4,10 @@ export const DEFAULT_SHEET_HANDLE_MARGIN_TOP = "0.75rem";
 export const DEFAULT_SHEET_HANDLE_MARGIN_BOTTOM = "0.75rem";
 export const DEFAULT_SHEET_HANDLE_BAR_HEIGHT = "0.25rem";
 export const DEFAULT_SHEET_HANDLE_WIDTH = "2.5rem";
+export const DEFAULT_SHEET_HANDLE_BORDER_RADIUS = "9999px";
 export const DEFAULT_SHEET_BORDER_RADIUS = "0.75rem";
+export const DEFAULT_SHEET_BORDER_WIDTH = "1px";
+export const DEFAULT_SHEET_BACKDROP_BLUR = "24px";
 export const DEFAULT_SHEET_HEADER_PADDING_HORIZONTAL = "0";
 export const DEFAULT_SHEET_HEADER_PADDING_VERTICAL = "0";
 export const DEFAULT_SHEET_DIVIDER_HEIGHT = "1px";
@@ -14,17 +17,24 @@ export const DEFAULT_SHEET_BODY_PADDING_HORIZONTAL = "0";
 export const DEFAULT_SHEET_BODY_PADDING_VERTICAL = "0";
 export const DEFAULT_SHEET_BODY_GAP = "0";
 export const DEFAULT_SHEET_LIST_ITEM_GAP = "0.5rem";
+export const DEFAULT_SHEET_LIST_ITEM_PADDING_HORIZONTAL = "0";
+export const DEFAULT_SHEET_LIST_ITEM_PADDING_VERTICAL = "0";
+export const DEFAULT_SHEET_LIST_ITEM_BORDER_RADIUS = "0";
+export const DEFAULT_SHEET_LIST_ITEM_CONTENT_GAP = "0";
 
 export type SheetHandleLayout = {
   marginTop?: number | string;
   marginBottom?: number | string;
   height?: number | string;
   width?: number | string;
+  borderRadius?: number | string;
 };
 
 /** Rounded top corners of the sheet panel (`.sheet-slide` in the DOM). */
 export type SheetPanelLayout = {
   borderRadius?: number | string;
+  borderWidth?: number | string;
+  backdropBlur?: number | string;
 };
 
 export type SheetSectionPaddingLayout = {
@@ -42,6 +52,10 @@ export type SheetBodyLayout = SheetSectionPaddingLayout & {
 
 export type SheetListItemLayout = {
   gap?: number | string;
+  paddingHorizontal?: number | string;
+  paddingVertical?: number | string;
+  borderRadius?: number | string;
+  contentGap?: number | string;
 };
 
 export type SheetBottomChromeReserveLayout = {
@@ -52,7 +66,7 @@ export type SheetBottomChromeReserveLayout = {
 };
 
 /** Geometry tokens for every sheet surface — colors come from `theme` + CSS classes. */
-export type SheetLayout = {
+export type SheetLayoutConfig = {
   handle?: SheetHandleLayout;
   sheet?: SheetPanelLayout;
   header?: SheetSectionPaddingLayout;
@@ -74,7 +88,9 @@ function toCssLength(
 }
 
 /** Layout tokens as CSS custom properties on `.sheet-slide`. */
-export function buildSheetLayoutVars(layout: SheetLayout = {}): CSSProperties {
+export function buildSheetLayoutVars(
+  layout: SheetLayoutConfig = {},
+): CSSProperties {
   const handle = layout.handle ?? {};
   const sheet = layout.sheet ?? {};
   const header = layout.header ?? {};
@@ -99,9 +115,21 @@ export function buildSheetLayoutVars(layout: SheetLayout = {}): CSSProperties {
       handle.width,
       DEFAULT_SHEET_HANDLE_WIDTH,
     ),
+    "--sheet-handle-border-radius": toCssLength(
+      handle.borderRadius,
+      DEFAULT_SHEET_HANDLE_BORDER_RADIUS,
+    ),
     "--sheet-border-radius": toCssLength(
       sheet.borderRadius,
       DEFAULT_SHEET_BORDER_RADIUS,
+    ),
+    "--sheet-border-width": toCssLength(
+      sheet.borderWidth,
+      DEFAULT_SHEET_BORDER_WIDTH,
+    ),
+    "--sheet-backdrop-blur": toCssLength(
+      sheet.backdropBlur,
+      DEFAULT_SHEET_BACKDROP_BLUR,
     ),
     "--sheet-header-padding-inline": toCssLength(
       header.paddingHorizontal,
@@ -136,14 +164,30 @@ export function buildSheetLayoutVars(layout: SheetLayout = {}): CSSProperties {
       listItem.gap,
       DEFAULT_SHEET_LIST_ITEM_GAP,
     ),
+    "--sheet-list-item-padding-inline": toCssLength(
+      listItem.paddingHorizontal,
+      DEFAULT_SHEET_LIST_ITEM_PADDING_HORIZONTAL,
+    ),
+    "--sheet-list-item-padding-block": toCssLength(
+      listItem.paddingVertical,
+      DEFAULT_SHEET_LIST_ITEM_PADDING_VERTICAL,
+    ),
+    "--sheet-list-item-border-radius": toCssLength(
+      listItem.borderRadius,
+      DEFAULT_SHEET_LIST_ITEM_BORDER_RADIUS,
+    ),
+    "--sheet-list-item-content-gap": toCssLength(
+      listItem.contentGap,
+      DEFAULT_SHEET_LIST_ITEM_CONTENT_GAP,
+    ),
   } as CSSProperties;
 }
 
 export function mergeSheetLayout(
-  base: SheetLayout,
-  overrides: SheetLayout = {},
-): SheetLayout {
-  const merged: SheetLayout = {};
+  base: SheetLayoutConfig,
+  overrides: SheetLayoutConfig = {},
+): SheetLayoutConfig {
+  const merged: SheetLayoutConfig = {};
 
   if (base.handle || overrides.handle) {
     merged.handle = { ...base.handle, ...overrides.handle };
@@ -164,10 +208,14 @@ export function mergeSheetLayout(
     merged.listItem = { ...base.listItem, ...overrides.listItem };
   }
   if (base.bottomChromeReserve || overrides.bottomChromeReserve) {
-    merged.bottomChromeReserve = {
-      ...base.bottomChromeReserve,
-      ...overrides.bottomChromeReserve,
-    };
+    const reserve =
+      overrides.bottomChromeReserve?.reserve ??
+      base.bottomChromeReserve?.reserve;
+    const gap =
+      overrides.bottomChromeReserve?.gap ?? base.bottomChromeReserve?.gap;
+    if (reserve !== undefined && gap !== undefined) {
+      merged.bottomChromeReserve = { reserve, gap };
+    }
   }
 
   return merged;

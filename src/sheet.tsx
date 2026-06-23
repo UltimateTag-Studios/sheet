@@ -16,11 +16,12 @@ import {
 import { canBodyScroll } from "./layout/scroll-mode";
 import type { SheetLayoutFrameChange } from "./layout/sheet-layout-frame-change";
 import { toSheetLayoutFrameChange } from "./layout/sheet-layout-frame-change";
-import type { SheetLayout } from "./layout/sheet-layout-vars";
+import type { SheetLayoutConfig } from "./layout/sheet-layout-vars";
 import { buildSheetLayoutVars } from "./layout/sheet-layout-vars";
 import { readVisibleSheetHeightPx } from "./layout/snap-heights";
 import type { SheetSnap } from "./layout/snap-math";
 import type { SheetSnapHeights } from "./layout/use-snap-heights";
+import type { SheetMachineState } from "./machine/sheet-machine";
 
 export type { SheetLayoutFrameChange };
 
@@ -37,7 +38,7 @@ export type SheetProps = {
   /** Fraction snap between collapsed and full (default 0.5). */
   halfSnapFraction?: number;
   /** Sheet geometry — spacing/sizing tokens as CSS variables. */
-  layout?: SheetLayout;
+  layout?: SheetLayoutConfig;
   /** Called when measured snap heights change. */
   onSnapHeightsChange?: (heights: {
     collapsedHeightPx: number;

@@ -15,7 +15,7 @@ export type {
   SheetBottomChromeReserveLayout,
   SheetDividerLayout,
   SheetHandleLayout,
-  SheetLayout,
+  SheetLayoutConfig,
   SheetListItemLayout,
   SheetPanelLayout,
   SheetSectionPaddingLayout,
@@ -30,12 +30,17 @@ export {
   DEFAULT_SHEET_DIVIDER_PADDING_HORIZONTAL,
   DEFAULT_SHEET_DIVIDER_PADDING_VERTICAL,
   DEFAULT_SHEET_HANDLE_BAR_HEIGHT,
+  DEFAULT_SHEET_HANDLE_BORDER_RADIUS,
   DEFAULT_SHEET_HANDLE_MARGIN_BOTTOM,
   DEFAULT_SHEET_HANDLE_MARGIN_TOP,
   DEFAULT_SHEET_HANDLE_WIDTH,
   DEFAULT_SHEET_HEADER_PADDING_HORIZONTAL,
   DEFAULT_SHEET_HEADER_PADDING_VERTICAL,
+  DEFAULT_SHEET_LIST_ITEM_BORDER_RADIUS,
+  DEFAULT_SHEET_LIST_ITEM_CONTENT_GAP,
   DEFAULT_SHEET_LIST_ITEM_GAP,
+  DEFAULT_SHEET_LIST_ITEM_PADDING_HORIZONTAL,
+  DEFAULT_SHEET_LIST_ITEM_PADDING_VERTICAL,
   mergeSheetLayout,
 } from "./layout/sheet-layout-vars";
 export {
@@ -54,5 +59,6 @@ export {
 } from "./sheet";
 export type { SheetLayoutProps } from "./sheet-layout";
 export { SheetLayout } from "./sheet-layout";
+export { SHEET_THEME_VARS } from "./theme/sheet-theme-vars";
 export type { Theme } from "./theme/theme";
 export { DEFAULT_THEME, SHEET_THEME_ATTR } from "./theme/theme";
