@@ -1,10 +1,10 @@
 # @siegetag/sheet
 
-Generic bottom sheet for React web apps — unified gesture state machine, no third-party sheet library.
+Generic bottom sheet for React web — unified gesture state machine, no third-party sheet library.
 
 **In scope:** measured snap heights (collapsed / half / full), handle + header + body gesture routing, continuous scroll/sheet handoffs at full height, structural layout (`SheetLayout`), semantic CSS theme tokens.
 
-**Out of scope:** product-specific sheet content (lists, titles, legends). Map integration lives in `@siegetag/sheet-map`. Floating tab bar padding is injected by the consumer via `SheetLayout.bottomChromeReserve`.
+**Out of scope:** product-specific sheet content (lists, titles, legends). Map integration lives in [`@siegetag/sheet-map`](../sheet-map). Floating tab bar padding is injected by the consumer via `SheetLayout.bottomChromeReserve`.
 
 ## Install
 
@@ -26,7 +26,7 @@ import "@siegetag/sheet/styles.css";
 
 ```tsx
 import { Sheet, SheetHost, SheetLayout, type SheetSnap } from "@siegetag/sheet";
-import "@siegetag/sheet/styles.css";
+import { useState } from "react";
 
 function Demo() {
   const [snap, setSnap] = useState<SheetSnap>("half");
@@ -41,28 +41,55 @@ function Demo() {
 }
 ```
 
-## Layout (`Sheet.layout` / `sheetLayout`)
+## Components
 
-Geometry only — spacing, radii, blur. Colors come from theme CSS tokens. Type: `SheetLayoutConfig`.
+| Component | Role |
+| --------- | ---- |
+| `SheetHost` | Positions the sheet stack; sets `data-sheet-theme` |
+| `Sheet` | Gesture machine, snap heights, `onSnapChange`, `onSnapSettled`, `onLayoutFrameChange` |
+| `SheetLayout` | Structural chrome: handle, header slot, divider, body slot, bottom reserve |
+
+### Snaps
+
+`SheetSnap`: `"collapsed"` | `"half"` | `"full"`. Controlled via `snap` + `onSnapChange`. Use `onSnapSettled` when you need the final snap after animation (e.g. deselect on collapse in `@siegetag/sheet-map`).
+
+### Bottom chrome reserve
+
+For floating tab bars or other fixed bottom UI:
+
+```tsx
+<Sheet
+  layout={{
+    bottomChromeReserve: {
+      reserve: "calc(env(safe-area-inset-bottom) + 4rem)", // collapsed spacer
+      gap: "1rem", // extra scroll padding at full height
+    },
+  }}
+>
+```
+
+## Layout (`Sheet.layout` / `SheetLayoutConfig`)
+
+Geometry only — spacing, radii, blur. Colors come from theme CSS tokens.
 
 | Section | Fields | CSS vars (on `.sheet-slide`) |
-|---------|--------|------------------------------|
+| ------- | ------ | ------------------------------ |
 | `handle` | `marginTop`, `marginBottom`, `height`, `width`, `borderRadius` | `--sheet-handle-*` |
 | `sheet` | `borderRadius`, `borderWidth`, `backdropBlur` | `--sheet-border-*`, `--sheet-backdrop-blur` |
 | `header` | `paddingHorizontal`, `paddingVertical` | `--sheet-header-padding-*` |
 | `divider` | `paddingHorizontal`, `paddingVertical`, `height` | `--sheet-divider-*` |
 | `body` | `paddingHorizontal`, `paddingVertical`, `gap` | `--sheet-body-*` |
 | `listItem` | `gap`, `paddingHorizontal`, `paddingVertical`, `borderRadius`, `contentGap` | `--sheet-list-item-*` |
-| `bottomChromeReserve` | `reserve`, `gap` | (measured spacer + scroll padding) |
+| `bottomChromeReserve` | `reserve`, `gap` | measured spacer + scroll padding |
 
-Use `buildSheetLayoutVars(layout)` or pass `layout` to `Sheet`.
+Use `buildSheetLayoutVars(layout)` or pass `layout` to `Sheet`. Export `SHEET_LAYOUT_VARS` for token names.
 
 ## Theming
 
 `theme: "light" | "dark"` on `SheetHost` sets `data-sheet-theme`. Bundled CSS defines semantic tokens on the host:
 
 | Token | Purpose |
-|-------|---------|
+| ----- | ------- |
 | `--sheet-color-text` | Sheet copy color |
 | `--sheet-color-surface-background` | Panel background |
 | `--sheet-color-surface-border` | Panel border |
@@ -73,16 +100,16 @@ Use `buildSheetLayoutVars(layout)` or pass `layout` to `Sheet`.
 Override in app CSS (after bundled import):
 
 ```css
-.sheet-host[data-sheet-theme="light"] {
-  --sheet-color-surface-background: #f8fafc;
+.sheet-host[data-sheet-theme="dark"] {
+  --sheet-color-surface-background: rgb(15 23 42 / 0.95);
 }
 ```
 
-Export `SHEET_THEME_VARS` lists all token names for tooling.
+Export `SHEET_THEME_VARS` lists all token names.
 
-## Live layout for map integrators
+## Map integrators
 
-Use `onLayoutFrameChange` on `Sheet` for machine-committed `visibleHeightPx` during drag. `@siegetag/sheet-map` syncs map padding from live sheet geometry.
+Use `onLayoutFrameChange` on `Sheet` for machine-committed `visibleHeightPx` during drag. [`@siegetag/sheet-map`](../sheet-map) syncs map padding from that live geometry — you typically do not wire this yourself when using `MapLayout`.
 
 ## Tests
 
