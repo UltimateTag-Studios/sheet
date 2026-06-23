@@ -12,7 +12,6 @@ import type {
   SheetPointerSurface,
 } from "../machine/sheet-machine";
 import { SHEET_AXIS_THRESHOLD_PX } from "../machine/sheet-machine";
-import { activatePointerDownTarget } from "./activate-pointer-down-target";
 import { visibleHeightMovedFromRestingSnap } from "./visible-height-moved-from-resting-snap";
 
 export type SheetPointerHandlers = {
@@ -192,8 +191,8 @@ export function useSheetPointerHandlers(
 
       endPointerSession();
 
-      if (!hadEffect) {
-        activatePointerDownTarget(tapTarget);
+      if (!hadEffect && tapTarget instanceof HTMLElement) {
+        tapTarget.click();
       }
     },
     [endPointerSession],
