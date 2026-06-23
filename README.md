@@ -85,7 +85,7 @@ For floating tab bars or other fixed bottom UI:
 
 Geometry only — spacing, radii, blur. Colors come from theme CSS tokens.
 
-| Section | Fields | CSS vars (on `.sheet-slide`) |
+| Section | Fields | CSS vars (on `.sheet`) |
 | ------- | ------ | ------------------------------ |
 | `handle` | `marginTop`, `marginBottom`, `height`, `width`, `borderRadius` | `--sheet-handle-*` |
 | `sheet` | `borderRadius`, `borderWidth`, `backdropBlur` | `--sheet-border-*`, `--sheet-backdrop-blur` |

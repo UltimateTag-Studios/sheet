@@ -30,7 +30,7 @@ export type SheetHandleLayout = {
   borderRadius?: number | string;
 };
 
-/** Rounded top corners of the sheet panel (`.sheet-slide` in the DOM). */
+/** Rounded top corners of the sheet panel (`.sheet` in the DOM). */
 export type SheetPanelLayout = {
   borderRadius?: number | string;
   borderWidth?: number | string;
@@ -87,7 +87,7 @@ function toCssLength(
   return typeof value === "number" ? `${value}px` : value;
 }
 
-/** Layout tokens as CSS custom properties on `.sheet-slide`. */
+/** Layout tokens as CSS custom properties on `.sheet`. */
 export function buildSheetLayoutVars(
   layout: SheetLayoutConfig = {},
 ): CSSProperties {

@@ -57,7 +57,7 @@ export function SheetLayout({ header, body }: SheetLayoutProps) {
   );
 
   return (
-    <div className="sheet-layers">
+    <>
       <SheetChrome
         measureRef={registerChromeMeasure}
         onChromePointerDown={pointerHandlers.onChromePointerDown}
@@ -88,6 +88,6 @@ export function SheetLayout({ header, body }: SheetLayoutProps) {
           style={{ height: bottomReserve }}
         />
       ) : null}
-    </div>
+    </>
   );
 }

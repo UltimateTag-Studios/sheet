@@ -267,7 +267,7 @@ export function useSheetPointerHandlers(
           return;
         }
 
-        const sheetBoundary = event.currentTarget.closest(".sheet-slide");
+        const sheetBoundary = event.currentTarget.closest(".sheet");
         if (!(sheetBoundary instanceof HTMLElement)) {
           return;
         }

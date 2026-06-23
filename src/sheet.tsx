@@ -50,8 +50,8 @@ export type SheetProps = {
   onSnapSettled?: (snap: SheetSnap) => void;
   /**
    * Fires when the machine commits a layout frame (drag move, snap apply, settle start).
-   * During drag, `visibleHeightPx` matches the live `.sheet-slide` DOM height.
-   * During CSS height transitions, read `.sheet-slide` geometry for in-between heights.
+   * During drag, `visibleHeightPx` matches the live `.sheet` DOM height.
+   * During CSS height transitions, read `.sheet` geometry for in-between heights.
    */
   onLayoutFrameChange?: (frame: SheetLayoutFrameChange) => void;
 };
@@ -286,7 +286,7 @@ export function Sheet({
   return (
     <div
       ref={sheetSlideRef}
-      className="sheet sheet-slide"
+      className="sheet"
       data-sheet-phase={state?.phase ?? "idle"}
       data-sheet-collapsed-header={atCollapsedHeader ? "" : undefined}
       style={{
@@ -296,7 +296,7 @@ export function Sheet({
       onTransitionEnd={onTransitionEnd}
     >
       <SheetContextProvider controls={controlsValue} metrics={metricsValue}>
-        <div className="sheet-inner">{children}</div>
+        {children}
       </SheetContextProvider>
     </div>
   );

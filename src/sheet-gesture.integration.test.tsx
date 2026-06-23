@@ -36,7 +36,7 @@ function sheetPhase(): string | null {
 }
 
 function completeSheetSettling() {
-  const slide = document.querySelector<HTMLElement>(".sheet-slide");
+  const slide = document.querySelector<HTMLElement>(".sheet");
   if (!slide) {
     throw new Error("Expected sheet slide");
   }
@@ -374,7 +374,7 @@ function dragSurface(
 }
 
 function slideHeightPx(): number {
-  const slide = document.querySelector<HTMLElement>(".sheet-slide");
+  const slide = document.querySelector<HTMLElement>(".sheet");
   return Number.parseInt(slide?.style.height ?? "0", 10);
 }
 
@@ -391,7 +391,7 @@ describe("Sheet gesture integration", () => {
   it("shows header chrome at collapsed snap with bottom-anchored height", () => {
     renderWithHost(<TestCollapsedSheet />);
 
-    const slide = document.querySelector<HTMLElement>(".sheet-slide");
+    const slide = document.querySelector<HTMLElement>(".sheet");
     const header = screen.getByTestId("sheet-header");
     expect(slide?.style.height).not.toBe("");
     expect(slideHeightPx()).toBeGreaterThan(80);
@@ -409,9 +409,9 @@ describe("Sheet gesture integration", () => {
     dragSurface(chrome, 1, 400, 100);
 
     expect(screen.getByTestId("snap").textContent).toBe("full");
-    expect(
-      document.querySelector<HTMLElement>(".sheet-slide")?.style.height,
-    ).toBe(`${DEFAULT_HOST_HEIGHT}px`);
+    expect(document.querySelector<HTMLElement>(".sheet")?.style.height).toBe(
+      `${DEFAULT_HOST_HEIGHT}px`,
+    );
   });
 
   it("drags chrome from full when body is scrolled and resets scroll on snap change", () => {
@@ -555,7 +555,7 @@ describe("Sheet gesture integration", () => {
     if (!(body instanceof HTMLDivElement)) {
       throw new Error("Expected sheet scroll root");
     }
-    const slide = document.querySelector<HTMLElement>(".sheet-slide");
+    const slide = document.querySelector<HTMLElement>(".sheet");
     if (!slide) {
       throw new Error("Expected sheet slide");
     }
@@ -648,9 +648,9 @@ describe("Sheet gesture integration", () => {
     dragSurface(chrome, 10, 750, 20);
 
     expect(screen.getByTestId("snap").textContent).toBe("full");
-    expect(
-      document.querySelector<HTMLElement>(".sheet-slide")?.style.height,
-    ).toBe(`${DEFAULT_HOST_HEIGHT}px`);
+    expect(document.querySelector<HTMLElement>(".sheet")?.style.height).toBe(
+      `${DEFAULT_HOST_HEIGHT}px`,
+    );
   });
 
   it("drags chrome from full height inside a shorter host", () => {
@@ -850,7 +850,7 @@ describe("Sheet gesture integration", () => {
       renderWithHost(<TestHalfSheetWithHeaderButtons />);
 
       const button = screen.getByTestId("header-action-button");
-      const slide = document.querySelector<HTMLElement>(".sheet-slide");
+      const slide = document.querySelector<HTMLElement>(".sheet");
       if (!slide) {
         throw new Error("Expected sheet slide");
       }

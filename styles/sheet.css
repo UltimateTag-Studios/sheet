@@ -62,21 +62,6 @@
   will-change: height;
 }
 
-.sheet-inner {
-  display: flex;
-  min-height: 0;
-  flex: 1;
-  flex-direction: column;
-}
-
-.sheet-layers {
-  position: relative;
-  display: flex;
-  min-height: 0;
-  flex: 1;
-  flex-direction: column;
-}
-
 /** Handle + optional header + divider — single drag surface. */
 .sheet-chrome {
   flex-shrink: 0;
