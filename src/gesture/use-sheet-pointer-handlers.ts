@@ -13,6 +13,7 @@ import type {
 } from "../machine/sheet-machine";
 import { SHEET_AXIS_THRESHOLD_PX } from "../machine/sheet-machine";
 import { activatePointerDownTarget } from "./activate-pointer-down-target";
+import { visibleHeightMovedFromRestingSnap } from "./visible-height-moved-from-resting-snap";
 
 export type SheetPointerHandlers = {
   onChromePointerDown: (event: ReactPointerEvent<HTMLElement>) => void;
@@ -61,7 +62,6 @@ export function useSheetPointerHandlers(
   const surfaceTargetRef = useRef<HTMLElement | null>(null);
   const committedRef = useRef(false);
   const gestureHadEffectRef = useRef(false);
-  const gestureStartVisibleHeightRef = useRef<number | null>(null);
   const trackingRef = useRef<PointerTracking | null>(null);
   const dispatchRef = useRef(dispatch);
   const readScrollTopRef = useRef(readScrollTop);
@@ -120,7 +120,6 @@ export function useSheetPointerHandlers(
     activePointerIdRef.current = null;
     committedRef.current = false;
     gestureHadEffectRef.current = false;
-    gestureStartVisibleHeightRef.current = null;
     removePointerTracking();
   }, [removePointerTracking]);
 
@@ -167,14 +166,11 @@ export function useSheetPointerHandlers(
     (event: PointerEvent, result: SheetMachineResult) => {
       const intent = result.state.gesture?.intent;
       const scrollDeltaPx = result.bodyScrollDeltaPx ?? 0;
-      const heightChanged =
-        gestureStartVisibleHeightRef.current !== null &&
-        result.state.visibleHeightPx !== gestureStartVisibleHeightRef.current;
 
       if (scrollDeltaPx !== 0) {
         applyBodyScrollDeltaRef.current(scrollDeltaPx);
         gestureHadEffectRef.current = true;
-      } else if (heightChanged) {
+      } else if (visibleHeightMovedFromRestingSnap(result.state)) {
         gestureHadEffectRef.current = true;
       }
 
@@ -217,7 +213,6 @@ export function useSheetPointerHandlers(
         return false;
       }
 
-      gestureStartVisibleHeightRef.current = downResult.state.visibleHeightPx;
       committedRef.current = true;
       pendingRef.current = null;
 
