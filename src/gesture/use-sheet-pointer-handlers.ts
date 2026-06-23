@@ -31,9 +31,7 @@ type PendingPointer = {
 type PointerTracking = {
   move: (event: PointerEvent) => void;
   up: (event: PointerEvent) => void;
-  moveOnDocument: boolean;
-  upOnDocument: boolean;
-  surfaceTarget: HTMLElement | null;
+  onDocument: boolean;
 };
 
 const POINTER_UP_LISTENER_OPTS: AddEventListenerOptions = { capture: true };
@@ -81,13 +79,8 @@ export function useSheetPointerHandlers(
       return;
     }
 
-    if (tracking.moveOnDocument) {
+    if (tracking.onDocument) {
       document.removeEventListener("pointermove", tracking.move);
-    } else if (tracking.surfaceTarget) {
-      tracking.surfaceTarget.removeEventListener("pointermove", tracking.move);
-    }
-
-    if (tracking.upOnDocument) {
       document.removeEventListener(
         "pointerup",
         tracking.up,
@@ -98,68 +91,65 @@ export function useSheetPointerHandlers(
         tracking.up,
         POINTER_UP_LISTENER_OPTS,
       );
-    } else if (tracking.surfaceTarget) {
-      tracking.surfaceTarget.removeEventListener(
-        "pointerup",
-        tracking.up,
-        POINTER_UP_LISTENER_OPTS,
-      );
-      tracking.surfaceTarget.removeEventListener(
-        "pointercancel",
-        tracking.up,
-        POINTER_UP_LISTENER_OPTS,
-      );
+    } else {
+      const surfaceTarget = surfaceTargetRef.current;
+      if (surfaceTarget) {
+        surfaceTarget.removeEventListener("pointermove", tracking.move);
+        surfaceTarget.removeEventListener(
+          "pointerup",
+          tracking.up,
+          POINTER_UP_LISTENER_OPTS,
+        );
+        surfaceTarget.removeEventListener(
+          "pointercancel",
+          tracking.up,
+          POINTER_UP_LISTENER_OPTS,
+        );
+      }
     }
 
     trackingRef.current = null;
   }, []);
 
   const resetPointerSession = useCallback(() => {
+    removePointerTracking();
     pendingRef.current = null;
     surfaceTargetRef.current = null;
     activePointerIdRef.current = null;
     committedRef.current = false;
     gestureHadEffectRef.current = false;
-    removePointerTracking();
   }, [removePointerTracking]);
 
   const promoteToDocumentPointerTracking = useCallback(() => {
     const tracking = trackingRef.current;
     const surfaceTarget = surfaceTargetRef.current;
-    if (!tracking || !surfaceTarget) {
+    if (!tracking || !surfaceTarget || tracking.onDocument) {
       return;
     }
 
-    if (!tracking.moveOnDocument) {
-      surfaceTarget.removeEventListener("pointermove", tracking.move);
-      document.addEventListener("pointermove", tracking.move);
-      tracking.moveOnDocument = true;
-    }
-
-    if (!tracking.upOnDocument) {
-      surfaceTarget.removeEventListener(
-        "pointerup",
-        tracking.up,
-        POINTER_UP_LISTENER_OPTS,
-      );
-      surfaceTarget.removeEventListener(
-        "pointercancel",
-        tracking.up,
-        POINTER_UP_LISTENER_OPTS,
-      );
-      document.addEventListener(
-        "pointerup",
-        tracking.up,
-        POINTER_UP_LISTENER_OPTS,
-      );
-      document.addEventListener(
-        "pointercancel",
-        tracking.up,
-        POINTER_UP_LISTENER_OPTS,
-      );
-      tracking.upOnDocument = true;
-      tracking.surfaceTarget = null;
-    }
+    surfaceTarget.removeEventListener("pointermove", tracking.move);
+    document.addEventListener("pointermove", tracking.move);
+    surfaceTarget.removeEventListener(
+      "pointerup",
+      tracking.up,
+      POINTER_UP_LISTENER_OPTS,
+    );
+    surfaceTarget.removeEventListener(
+      "pointercancel",
+      tracking.up,
+      POINTER_UP_LISTENER_OPTS,
+    );
+    document.addEventListener(
+      "pointerup",
+      tracking.up,
+      POINTER_UP_LISTENER_OPTS,
+    );
+    document.addEventListener(
+      "pointercancel",
+      tracking.up,
+      POINTER_UP_LISTENER_OPTS,
+    );
+    tracking.onDocument = true;
   }, []);
 
   const applyMoveResult = useCallback(
@@ -351,9 +341,7 @@ export function useSheetPointerHandlers(
         trackingRef.current = {
           move,
           up,
-          moveOnDocument: false,
-          upOnDocument: false,
-          surfaceTarget,
+          onDocument: false,
         };
       },
     [
