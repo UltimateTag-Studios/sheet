@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { deactivatePostDragClickRepairForTests } from "./gesture/activate-post-drag-click-repair";
 import { Sheet } from "./sheet";
-import { SheetLayout } from "./sheet-layout";
 import {
   completeSheetSettling,
   DEFAULT_HOST_HEIGHT,
@@ -37,6 +36,7 @@ import {
   TestHalfSheetWithSnapCommands,
   TestSheet,
 } from "./sheet-gesture/fixtures";
+import { SheetLayout } from "./sheet-layout";
 
 describe("Sheet gesture integration", () => {
   afterEach(() => {
