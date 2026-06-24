@@ -1,4 +1,5 @@
 import { SHEET_AXIS_THRESHOLD_PX } from "../machine";
+import { resolvePointerTarget } from "./resolve-press-element";
 import { scheduleTapClickIfMissing } from "./schedule-tap-click-if-missing";
 
 type OutsideTap = {
@@ -20,23 +21,6 @@ function pointerTargetOutsideSheet(
   sheetBoundary: HTMLElement,
 ): boolean {
   return target instanceof Node && !sheetBoundary.contains(target);
-}
-
-function resolvePointerTarget(
-  target: EventTarget | null,
-  clientX: number,
-  clientY: number,
-): Element | null {
-  if (target instanceof Element) {
-    return target;
-  }
-
-  if (target instanceof Text && target.parentElement) {
-    return target.parentElement;
-  }
-
-  const hit = document.elementFromPoint(clientX, clientY);
-  return hit instanceof Element ? hit : null;
 }
 
 function isSameTapTarget(downTarget: Element, upTarget: Element): boolean {

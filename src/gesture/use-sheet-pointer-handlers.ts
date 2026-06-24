@@ -10,10 +10,10 @@ import {
   type SheetMachineEvent,
   type SheetMachineResult,
   type SheetPhase,
-  type SheetPointerArm,
   type SheetPointerRoute,
   type SheetPointerSurface,
 } from "../machine";
+import { resolvePressElement } from "./resolve-press-element";
 import { scheduleTapClickIfMissing } from "./schedule-tap-click-if-missing";
 
 export type SheetPointerHandlers = {
@@ -35,18 +35,10 @@ type DomPointerLatch = {
   startClientY: number;
   lastClientY: number;
   pointerCaptured: boolean;
+  committed: boolean;
+  hadEffect: boolean;
   tracking: PointerTracking;
 };
-
-function resolvePressElement(target: EventTarget): HTMLElement | null {
-  if (target instanceof HTMLElement) {
-    return target;
-  }
-  if (target instanceof Text && target.parentElement) {
-    return target.parentElement;
-  }
-  return null;
-}
 
 const MOVE_LISTENER: AddEventListenerOptions = { passive: true };
 
@@ -143,6 +135,15 @@ function commitWatchRoute(latch: DomPointerLatch): void {
   }
 }
 
+function notePointerMachineResult(
+  latch: DomPointerLatch,
+  result: SheetMachineResult,
+): void {
+  if (result.state.pointerArm?.hadEffect) {
+    latch.hadEffect = true;
+  }
+}
+
 /**
  * Pointer routing on the sheet panel only — no document listeners.
  * Gesture intent lives in the sheet machine (`pointerArm` / `pointerCommit`).
@@ -151,18 +152,15 @@ export function useSheetPointerHandlers(
   dispatch: (event: SheetMachineEvent) => SheetMachineResult,
   readScrollTop: () => number,
   readMachinePhase: () => SheetPhase | null,
-  readPointerArm: () => SheetPointerArm | null,
 ): SheetPointerHandlers {
   const latchRef = useRef<DomPointerLatch | null>(null);
   const dispatchRef = useRef(dispatch);
   const readScrollTopRef = useRef(readScrollTop);
   const readMachinePhaseRef = useRef(readMachinePhase);
-  const readPointerArmRef = useRef(readPointerArm);
 
   dispatchRef.current = dispatch;
   readScrollTopRef.current = readScrollTop;
   readMachinePhaseRef.current = readMachinePhase;
-  readPointerArmRef.current = readPointerArm;
 
   const endPointerLatch = useCallback(() => {
     const latch = latchRef.current;
@@ -179,15 +177,14 @@ export function useSheetPointerHandlers(
         return;
       }
 
-      const arm = readPointerArmRef.current();
-      const wasCommitted = arm?.committed ?? false;
-      const hadEffect = arm?.hadEffect ?? false;
       const {
         pressTarget,
         sheetBoundary,
         startClientY,
         lastClientY,
         pointerId,
+        committed: wasCommitted,
+        hadEffect,
       } = latch;
 
       if (wasCommitted) {
@@ -230,8 +227,7 @@ export function useSheetPointerHandlers(
       return;
     }
 
-    const arm = readPointerArmRef.current();
-    if (!arm?.committed) {
+    if (!latch.committed) {
       const deltaY = Math.abs(event.clientY - latch.startClientY);
       if (deltaY < SHEET_AXIS_THRESHOLD_PX) {
         return;
@@ -246,26 +242,29 @@ export function useSheetPointerHandlers(
         );
       }
 
-      dispatchRef.current({
+      latch.committed = true;
+      const result = dispatchRef.current({
         type: "pointerCommit",
         pointerId: event.pointerId,
         clientY: event.clientY,
         scrollTopPx: readScrollTopRef.current(),
         timeMs: performance.now(),
       });
+      notePointerMachineResult(latch, result);
       latch.lastClientY = event.clientY;
       return;
     }
 
     latch.lastClientY = event.clientY;
 
-    dispatchRef.current({
+    const result = dispatchRef.current({
       type: "pointerMove",
       pointerId: event.pointerId,
       clientY: event.clientY,
       scrollTopPx: readScrollTopRef.current(),
       timeMs: performance.now(),
     });
+    notePointerMachineResult(latch, result);
   }, []);
 
   const onPointerDown = useCallback(
@@ -309,6 +308,8 @@ export function useSheetPointerHandlers(
           startClientY: event.clientY,
           lastClientY: event.clientY,
           pointerCaptured,
+          committed: false,
+          hadEffect: false,
           tracking,
         };
 

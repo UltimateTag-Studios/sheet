@@ -193,12 +193,11 @@ export function Sheet({
     onLayoutMeasureRef,
   });
 
-  const { state, stateRef, isReady, dispatch, readPhase, readPointerArm } =
-    useSheetMachine({
-      restingSnap,
-      controlledSnap: snap,
-      runEffect,
-    });
+  const { state, stateRef, isReady, dispatch, readPhase } = useSheetMachine({
+    restingSnap,
+    controlledSnap: snap,
+    runEffect,
+  });
 
   dispatchRef.current = dispatch;
   hookStateRef.current = stateRef;
@@ -236,7 +235,6 @@ export function Sheet({
     dispatch,
     readScrollTop,
     readPhase,
-    readPointerArm,
   );
 
   const stateRefForSettle = useRef(state);

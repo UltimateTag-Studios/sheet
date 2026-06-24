@@ -95,7 +95,6 @@ export function useSheetMachine({
   isReady: boolean;
   dispatch: SheetMachineDispatch;
   readPhase: () => SheetPhase | null;
-  readPointerArm: () => import("./state").SheetPointerArm | null;
 } {
   const runEffectRef = useRef(runEffect);
   runEffectRef.current = runEffect;
@@ -154,6 +153,5 @@ export function useSheetMachine({
     isReady: state !== null,
     dispatch,
     readPhase: () => stateRef.current?.phase ?? null,
-    readPointerArm: () => stateRef.current?.pointerArm ?? null,
   };
 }
