@@ -1,20 +1,13 @@
 import { useCallback, useEffect, useRef } from "react";
 
 import type { SheetSnap } from "../layout/snap-math";
-import {
-  computeScrollReleaseVelocityPxPerMs,
-  runScrollMomentum,
-  type ScrollPointerSample,
-  shouldStartScrollMomentum,
-} from "./sheet-body-scroll-momentum";
+import { runScrollMomentum } from "./sheet-body-scroll-momentum";
 
 export function useSheetBodyScroll(restingSnap: SheetSnap) {
   const bodyElRef = useRef<HTMLDivElement | null>(null);
   const bodyScrollCleanupRef = useRef<(() => void) | null>(null);
   const scrollTopRef = useRef(0);
   const prevRestingSnapRef = useRef(restingSnap);
-  const scrollSamplesRef = useRef<ScrollPointerSample[]>([]);
-  const scrollTrackingRef = useRef(false);
   const stopMomentumRef = useRef<(() => void) | null>(null);
 
   const cancelScrollMomentum = useCallback(() => {
@@ -48,52 +41,27 @@ export function useSheetBodyScroll(restingSnap: SheetSnap) {
     [cancelScrollMomentum],
   );
 
-  const clearScrollPointerTracking = useCallback(() => {
-    scrollSamplesRef.current = [];
-    scrollTrackingRef.current = false;
-  }, []);
+  const startScrollMomentum = useCallback(
+    (velocityPxPerMs: number) => {
+      const bodyEl = bodyElRef.current;
+      if (!bodyEl) {
+        return;
+      }
 
-  const recordScrollPointerSample = useCallback((clientY: number) => {
-    scrollTrackingRef.current = true;
-    scrollSamplesRef.current.push({
-      timeMs: performance.now(),
-      clientY,
-    });
-
-    const cutoffMs = performance.now() - 120;
-    scrollSamplesRef.current = scrollSamplesRef.current.filter(
-      (sample) => sample.timeMs >= cutoffMs,
-    );
-  }, []);
-
-  const releaseScrollMomentum = useCallback(() => {
-    if (!scrollTrackingRef.current) {
-      clearScrollPointerTracking();
-      return;
-    }
-
-    const bodyEl = bodyElRef.current;
-    const velocityPxPerMs = computeScrollReleaseVelocityPxPerMs(
-      scrollSamplesRef.current,
-    );
-    clearScrollPointerTracking();
-
-    if (!bodyEl || !shouldStartScrollMomentum(velocityPxPerMs)) {
-      return;
-    }
-
-    cancelScrollMomentum();
-    stopMomentumRef.current = runScrollMomentum({
-      bodyEl,
-      initialVelocityPxPerMs: velocityPxPerMs,
-      onScrollTopChange: () => {
-        scrollTopRef.current = bodyEl.scrollTop;
-      },
-      onComplete: () => {
-        stopMomentumRef.current = null;
-      },
-    });
-  }, [cancelScrollMomentum, clearScrollPointerTracking]);
+      cancelScrollMomentum();
+      stopMomentumRef.current = runScrollMomentum({
+        bodyEl,
+        initialVelocityPxPerMs: velocityPxPerMs,
+        onScrollTopChange: () => {
+          scrollTopRef.current = bodyEl.scrollTop;
+        },
+        onComplete: () => {
+          stopMomentumRef.current = null;
+        },
+      });
+    },
+    [cancelScrollMomentum],
+  );
 
   const registerBodyEl = useCallback(
     (node: HTMLDivElement | null) => {
@@ -130,7 +98,6 @@ export function useSheetBodyScroll(restingSnap: SheetSnap) {
 
     prevRestingSnapRef.current = restingSnap;
     cancelScrollMomentum();
-    clearScrollPointerTracking();
 
     const bodyEl = bodyElRef.current;
     if (!bodyEl) {
@@ -139,15 +106,13 @@ export function useSheetBodyScroll(restingSnap: SheetSnap) {
 
     bodyEl.scrollTop = 0;
     scrollTopRef.current = 0;
-  }, [cancelScrollMomentum, clearScrollPointerTracking, restingSnap]);
+  }, [cancelScrollMomentum, restingSnap]);
 
   return {
     readScrollTop,
     applyBodyScrollDelta,
     registerBodyEl,
-    recordScrollPointerSample,
-    releaseScrollMomentum,
+    startScrollMomentum,
     cancelScrollMomentum,
-    clearScrollPointerTracking,
   };
 }

@@ -30,17 +30,19 @@ describe("useSheetMachine", () => {
 
     act(() => {
       result.current.dispatch({
-        type: "pointerDown",
+        type: "pointerArm",
         pointerId: 1,
         clientY: 500,
         scrollTopPx: 0,
         surface: "chrome",
+        route: "sheet",
       });
       result.current.dispatch({
-        type: "pointerMove",
+        type: "pointerCommit",
         pointerId: 1,
         clientY: 480,
         scrollTopPx: 0,
+        timeMs: 100,
       });
     });
 
@@ -53,6 +55,7 @@ describe("useSheetMachine", () => {
           pointerId: 1,
           clientY,
           scrollTopPx: 0,
+          timeMs: 100,
         });
       }
     });

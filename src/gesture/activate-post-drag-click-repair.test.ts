@@ -155,6 +155,54 @@ describe("activatePostDragClickRepair", () => {
     target.remove();
   });
 
+  it("honors shouldSkipTarget for outside taps", async () => {
+    const sheet = document.createElement("div");
+    sheet.className = "sheet";
+    document.body.appendChild(sheet);
+
+    const skipped = document.createElement("div");
+    skipped.dataset.role = "skip-me";
+    document.body.appendChild(skipped);
+
+    const onClick = vi.fn();
+    skipped.addEventListener("click", onClick);
+
+    activatePostDragClickRepair(sheet, {
+      shouldSkipTarget: (target) =>
+        target instanceof HTMLElement && target.dataset.role === "skip-me",
+    });
+
+    skipped.dispatchEvent(
+      new PointerEvent("pointerdown", {
+        pointerId: 5,
+        clientX: 10,
+        clientY: 10,
+        bubbles: true,
+        button: 0,
+      }),
+    );
+    skipped.dispatchEvent(
+      new PointerEvent("pointerup", {
+        pointerId: 5,
+        clientX: 10,
+        clientY: 10,
+        bubbles: true,
+        button: 0,
+      }),
+    );
+
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => resolve());
+      });
+    });
+
+    expect(onClick).not.toHaveBeenCalled();
+
+    sheet.remove();
+    skipped.remove();
+  });
+
   it("ignores taps that start on the sheet", async () => {
     const sheet = document.createElement("div");
     sheet.className = "sheet";

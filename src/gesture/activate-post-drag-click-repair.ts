@@ -57,10 +57,6 @@ function pointerMovedBeyondTap(
   );
 }
 
-function isMapboxCanvasTarget(target: Element): boolean {
-  return target.matches(".mapboxgl-canvas");
-}
-
 function dispatchSyntheticClick(
   target: Element,
   clientX: number,
@@ -103,10 +99,18 @@ function scheduleClickIfMissing(
  * Android WebView often skips `click` on the first tap after a sheet drag, even
  * when `pointerdown`/`pointerup` reach the target. After a real drag, watch for
  * the next outside-sheet tap and dispatch `click` on the tapped element when the
- * browser does not. Mapbox canvas taps are handled by `@siegetag/sheet-map`
- * pointer picking — not DOM click repair.
+ * browser does not.
  */
-export function activatePostDragClickRepair(sheetBoundary: HTMLElement): void {
+export type PostDragClickRepairOptions = {
+  /** When true, the repair session ignores pointerdown on this target. */
+  shouldSkipTarget?: (target: Element) => boolean;
+};
+
+export function activatePostDragClickRepair(
+  sheetBoundary: HTMLElement,
+  options: PostDragClickRepairOptions = {},
+): void {
+  const shouldSkipTarget = options.shouldSkipTarget;
   activeRepair?.deactivate();
 
   const session: RepairSession = {
@@ -144,7 +148,7 @@ export function activatePostDragClickRepair(sheetBoundary: HTMLElement): void {
       return;
     }
 
-    if (isMapboxCanvasTarget(downTarget)) {
+    if (shouldSkipTarget?.(downTarget)) {
       return;
     }
 

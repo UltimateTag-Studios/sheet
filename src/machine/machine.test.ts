@@ -1,12 +1,66 @@
 import { describe, expect, it } from "vitest";
 
-import { createInitialSheetMachineState, reduceSheetMachine } from "./index";
+import {
+  createInitialSheetMachineState,
+  reduceSheetMachine,
+  type SheetMachineState,
+  type SheetPointerSurface,
+} from "./index";
 
 const baseHeights = {
   collapsedHeightPx: 150,
   halfHeightPx: 350,
   fullHeightPx: 700,
 };
+
+const TIME_MS = 100;
+
+function armPointer(
+  state: SheetMachineState,
+  args: {
+    clientY: number;
+    scrollTopPx?: number;
+    surface: SheetPointerSurface;
+    route?: "watch" | "sheet";
+  },
+) {
+  return reduceSheetMachine(state, {
+    type: "pointerArm",
+    pointerId: 1,
+    clientY: args.clientY,
+    scrollTopPx: args.scrollTopPx ?? 0,
+    surface: args.surface,
+    route: args.route ?? "sheet",
+  });
+}
+
+function commitPointer(
+  state: SheetMachineState,
+  clientY: number,
+  scrollTopPx = 0,
+) {
+  return reduceSheetMachine(state, {
+    type: "pointerCommit",
+    pointerId: 1,
+    clientY,
+    scrollTopPx,
+    timeMs: TIME_MS,
+  });
+}
+
+function movePointer(
+  state: SheetMachineState,
+  clientY: number,
+  scrollTopPx = 0,
+) {
+  return reduceSheetMachine(state, {
+    type: "pointerMove",
+    pointerId: 1,
+    clientY,
+    scrollTopPx,
+    timeMs: TIME_MS,
+  });
+}
 
 describe("reduceSheetMachine", () => {
   it("starts at half height when resting snap is half", () => {
@@ -24,17 +78,14 @@ describe("reduceSheetMachine", () => {
       ...baseHeights,
     });
 
-    const result = reduceSheetMachine(initial, {
-      type: "pointerDown",
-      pointerId: 1,
+    const result = armPointer(initial, {
       clientY: 400,
-      scrollTopPx: 0,
       surface: "body",
     });
 
     expect(result.state.phase).toBe("idle");
     expect(result.state.gesture?.intent).toBe("sheet");
-    expect(result.effects).toEqual([]);
+    expect(result.effects).toEqual([{ type: "cancelScrollMomentum" }]);
   });
 
   it("clears armed body gesture on tap release without move", () => {
@@ -43,11 +94,8 @@ describe("reduceSheetMachine", () => {
       ...baseHeights,
     });
 
-    const armed = reduceSheetMachine(initial, {
-      type: "pointerDown",
-      pointerId: 1,
+    const armed = armPointer(initial, {
       clientY: 400,
-      scrollTopPx: 0,
       surface: "body",
     }).state;
 
@@ -67,9 +115,7 @@ describe("reduceSheetMachine", () => {
       ...baseHeights,
     });
 
-    const result = reduceSheetMachine(initial, {
-      type: "pointerDown",
-      pointerId: 1,
+    const result = armPointer(initial, {
       clientY: 400,
       scrollTopPx: 48,
       surface: "body",
@@ -77,7 +123,7 @@ describe("reduceSheetMachine", () => {
 
     expect(result.state.phase).toBe("idle");
     expect(result.state.gesture?.intent).toBe("scroll");
-    expect(result.effects).toEqual([]);
+    expect(result.effects).toEqual([{ type: "cancelScrollMomentum" }]);
   });
 
   it("arms chrome sheet intent without dragging until move slop", () => {
@@ -86,9 +132,7 @@ describe("reduceSheetMachine", () => {
       ...baseHeights,
     });
 
-    const result = reduceSheetMachine(initial, {
-      type: "pointerDown",
-      pointerId: 1,
+    const result = armPointer(initial, {
       clientY: 400,
       scrollTopPx: 48,
       surface: "chrome",
@@ -97,7 +141,7 @@ describe("reduceSheetMachine", () => {
     expect(result.state.phase).toBe("idle");
     expect(result.state.gesture?.intent).toBe("sheet");
     expect(result.state.gesture?.surface).toBe("chrome");
-    expect(result.effects).toEqual([]);
+    expect(result.effects).toEqual([{ type: "cancelScrollMomentum" }]);
   });
 
   it("clears armed chrome gesture on tap release without move", () => {
@@ -106,11 +150,8 @@ describe("reduceSheetMachine", () => {
       ...baseHeights,
     });
 
-    const armed = reduceSheetMachine(initial, {
-      type: "pointerDown",
-      pointerId: 1,
+    const armed = armPointer(initial, {
       clientY: 400,
-      scrollTopPx: 0,
       surface: "chrome",
     }).state;
 
@@ -130,37 +171,25 @@ describe("reduceSheetMachine", () => {
       ...baseHeights,
     });
 
-    state = reduceSheetMachine(state, {
-      type: "pointerDown",
-      pointerId: 1,
+    state = armPointer(state, {
       clientY: 400,
       scrollTopPx: 48,
       surface: "chrome",
     }).state;
 
-    const slopCross = reduceSheetMachine(state, {
-      type: "pointerMove",
-      pointerId: 1,
-      clientY: 409,
-      scrollTopPx: 48,
-    });
+    const slopCross = commitPointer(state, 409, 48);
 
     expect(slopCross.state.phase).toBe("dragging");
     expect(slopCross.effects).toContainEqual({ type: "notifyDragStart" });
 
-    const result = reduceSheetMachine(slopCross.state, {
-      type: "pointerMove",
-      pointerId: 1,
-      clientY: 460,
-      scrollTopPx: 48,
-    });
+    const result = movePointer(slopCross.state, 460, 48);
 
     expect(result.state.phase).toBe("dragging");
     expect(result.state.gesture?.intent).toBe("sheet");
     expect(result.state.visibleHeightPx).toBeLessThan(700);
   });
 
-  it("ignores pointer down while settling", () => {
+  it("ignores pointer arm while settling", () => {
     const initial = createInitialSheetMachineState({
       restingSnap: "half",
       ...baseHeights,
@@ -171,11 +200,8 @@ describe("reduceSheetMachine", () => {
       visibleHeightPx: 500,
     };
 
-    const result = reduceSheetMachine(settling, {
-      type: "pointerDown",
-      pointerId: 1,
+    const result = armPointer(settling, {
       clientY: 400,
-      scrollTopPx: 0,
       surface: "body",
     });
 
@@ -189,17 +215,14 @@ describe("reduceSheetMachine", () => {
       ...baseHeights,
     });
 
-    const result = reduceSheetMachine(initial, {
-      type: "pointerDown",
-      pointerId: 1,
+    const result = armPointer(initial, {
       clientY: 400,
-      scrollTopPx: 0,
       surface: "body",
     });
 
     expect(result.state.phase).toBe("idle");
     expect(result.state.gesture?.intent).toBe("pendingAxis");
-    expect(result.effects).toEqual([]);
+    expect(result.effects).toEqual([{ type: "cancelScrollMomentum" }]);
   });
 
   it("transitions upward pendingAxis moves to scroll at full height", () => {
@@ -208,20 +231,12 @@ describe("reduceSheetMachine", () => {
       ...baseHeights,
     });
 
-    state = reduceSheetMachine(state, {
-      type: "pointerDown",
-      pointerId: 1,
+    state = armPointer(state, {
       clientY: 400,
-      scrollTopPx: 0,
       surface: "body",
     }).state;
 
-    const result = reduceSheetMachine(state, {
-      type: "pointerMove",
-      pointerId: 1,
-      clientY: 380,
-      scrollTopPx: 0,
-    });
+    const result = commitPointer(state, 380);
 
     expect(result.state.gesture?.intent).toBe("scroll");
     expect(result.effects).toContainEqual({ type: "scrollBody", deltaPx: 12 });
@@ -233,20 +248,12 @@ describe("reduceSheetMachine", () => {
       ...baseHeights,
     });
 
-    state = reduceSheetMachine(state, {
-      type: "pointerDown",
-      pointerId: 1,
+    state = armPointer(state, {
       clientY: 400,
-      scrollTopPx: 0,
       surface: "body",
     }).state;
 
-    const result = reduceSheetMachine(state, {
-      type: "pointerMove",
-      pointerId: 1,
-      clientY: 420,
-      scrollTopPx: 0,
-    });
+    const result = commitPointer(state, 420);
 
     expect(result.state.gesture?.intent).toBe("sheet");
     expect(result.state.gesture?.startClientY).toBe(420);
@@ -261,27 +268,15 @@ describe("reduceSheetMachine", () => {
       ...baseHeights,
     });
 
-    state = reduceSheetMachine(state, {
-      type: "pointerDown",
-      pointerId: 1,
+    state = armPointer(state, {
       clientY: 400,
       scrollTopPx: 48,
       surface: "body",
     }).state;
 
-    state = reduceSheetMachine(state, {
-      type: "pointerMove",
-      pointerId: 1,
-      clientY: 430,
-      scrollTopPx: 18,
-    }).state;
+    state = commitPointer(state, 430, 18).state;
 
-    const result = reduceSheetMachine(state, {
-      type: "pointerMove",
-      pointerId: 1,
-      clientY: 440,
-      scrollTopPx: 0,
-    });
+    const result = movePointer(state, 440, 0);
 
     expect(result.state.gesture?.intent).toBe("sheet");
     expect(result.state.visibleHeightPx).toBeLessThan(700);
@@ -294,29 +289,16 @@ describe("reduceSheetMachine", () => {
       ...baseHeights,
     });
 
-    state = reduceSheetMachine(state, {
-      type: "pointerDown",
-      pointerId: 1,
+    state = armPointer(state, {
       clientY: 400,
-      scrollTopPx: 0,
       surface: "body",
     }).state;
 
-    state = reduceSheetMachine(state, {
-      type: "pointerMove",
-      pointerId: 1,
-      clientY: 50,
-      scrollTopPx: 0,
-    }).state;
+    state = commitPointer(state, 50).state;
 
     expect(state.visibleHeightPx).toBe(700);
 
-    const result = reduceSheetMachine(state, {
-      type: "pointerMove",
-      pointerId: 1,
-      clientY: 40,
-      scrollTopPx: 0,
-    });
+    const result = movePointer(state, 40);
 
     expect(result.state.visibleHeightPx).toBe(700);
     expect(result.state.gesture?.intent).toBe("scroll");
@@ -335,20 +317,12 @@ describe("reduceSheetMachine", () => {
       ...reserveHeights,
     });
 
-    state = reduceSheetMachine(state, {
-      type: "pointerDown",
-      pointerId: 1,
+    state = armPointer(state, {
       clientY: 400,
-      scrollTopPx: 0,
       surface: "body",
     }).state;
 
-    state = reduceSheetMachine(state, {
-      type: "pointerMove",
-      pointerId: 1,
-      clientY: 600,
-      scrollTopPx: 0,
-    }).state;
+    state = commitPointer(state, 600).state;
 
     expect(state.visibleHeightPx).toBe(210);
   });
@@ -359,20 +333,12 @@ describe("reduceSheetMachine", () => {
       ...baseHeights,
     });
 
-    state = reduceSheetMachine(state, {
-      type: "pointerDown",
-      pointerId: 1,
+    state = armPointer(state, {
       clientY: 400,
-      scrollTopPx: 0,
       surface: "body",
     }).state;
 
-    const result = reduceSheetMachine(state, {
-      type: "pointerMove",
-      pointerId: 1,
-      clientY: 360,
-      scrollTopPx: 0,
-    });
+    const result = commitPointer(state, 360);
 
     expect(result.state.visibleHeightPx).toBeGreaterThan(350);
   });
@@ -383,20 +349,12 @@ describe("reduceSheetMachine", () => {
       ...baseHeights,
     });
 
-    state = reduceSheetMachine(state, {
-      type: "pointerDown",
-      pointerId: 1,
+    state = armPointer(state, {
       clientY: 300,
-      scrollTopPx: 0,
       surface: "body",
     }).state;
 
-    state = reduceSheetMachine(state, {
-      type: "pointerMove",
-      pointerId: 1,
-      clientY: 100,
-      scrollTopPx: 0,
-    }).state;
+    state = commitPointer(state, 100).state;
 
     const result = reduceSheetMachine(state, {
       type: "pointerUp",
@@ -409,6 +367,9 @@ describe("reduceSheetMachine", () => {
     expect(result.effects).toContainEqual({
       type: "notifySnapChange",
       snap: "full",
+    });
+    expect(result.effects).toContainEqual({
+      type: "activatePostDragClickRepair",
     });
   });
 

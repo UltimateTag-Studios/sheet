@@ -5,15 +5,15 @@ import {
   useRef,
 } from "react";
 
-import { isVisibleHeightAtRestingSnap } from "../layout/snap-math";
 import {
   SHEET_AXIS_THRESHOLD_PX,
   type SheetMachineEvent,
   type SheetMachineResult,
   type SheetPhase,
+  type SheetPointerArm,
+  type SheetPointerRoute,
   type SheetPointerSurface,
 } from "../machine";
-import { activatePostDragClickRepair } from "./activate-post-drag-click-repair";
 
 export type SheetPointerHandlers = {
   onChromePointerDown: (event: ReactPointerEvent<HTMLElement>) => void;
@@ -25,20 +25,15 @@ type PointerTracking = {
   up: (event: PointerEvent) => void;
 };
 
-type SessionPhase = "watch" | "sheet";
-
-type PointerSession = {
+/** DOM-only latch — capture, routing element, and tap synthesis targets. */
+type DomPointerLatch = {
   pointerId: number;
   pressTarget: EventTarget;
   sheetBoundary: HTMLElement;
   routeElement: HTMLElement;
-  phase: SessionPhase;
+  route: SheetPointerRoute;
   startClientY: number;
   lastClientY: number;
-  scrollTopPx: number;
-  surface: SheetPointerSurface;
-  committed: boolean;
-  hadEffect: boolean;
   pointerCaptured: boolean;
   tracking: PointerTracking;
 };
@@ -109,9 +104,9 @@ function releaseSheetPointerCapture(
   }
 }
 
-function detachPointerTracking(session: PointerSession): void {
+function detachPointerTracking(latch: DomPointerLatch): void {
   const { tracking, routeElement, pointerId, pointerCaptured, sheetBoundary } =
-    session;
+    latch;
   routeElement.removeEventListener("pointermove", tracking.move, MOVE_LISTENER);
   routeElement.removeEventListener("pointerup", tracking.up);
   routeElement.removeEventListener("pointercancel", tracking.up);
@@ -120,153 +115,81 @@ function detachPointerTracking(session: PointerSession): void {
   }
 }
 
-function attachPointerTracking(session: PointerSession): void {
-  const { tracking, routeElement } = session;
+function attachPointerTracking(latch: DomPointerLatch): void {
+  const { tracking, routeElement } = latch;
   routeElement.addEventListener("pointermove", tracking.move, MOVE_LISTENER);
   routeElement.addEventListener("pointerup", tracking.up);
   routeElement.addEventListener("pointercancel", tracking.up);
 }
 
-function promoteWatchToSheet(session: PointerSession): void {
-  detachPointerTracking(session);
-  session.routeElement = session.sheetBoundary;
-  session.phase = "sheet";
-  attachPointerTracking(session);
-  if (!session.pointerCaptured) {
-    session.pointerCaptured = acquireSheetPointerCapture(
-      session.sheetBoundary,
-      session.pointerId,
+function promoteWatchToSheet(latch: DomPointerLatch): void {
+  detachPointerTracking(latch);
+  latch.routeElement = latch.sheetBoundary;
+  latch.route = "sheet";
+  attachPointerTracking(latch);
+  if (!latch.pointerCaptured) {
+    latch.pointerCaptured = acquireSheetPointerCapture(
+      latch.sheetBoundary,
+      latch.pointerId,
     );
   }
 }
 
 /**
  * Pointer routing on the sheet panel only — no document listeners.
- * Interactive controls are watched on the press target until move slop.
- * Move never calls preventDefault (Android poisons the next gesture's click).
- * Pure in-sheet taps: preventDefault on release + activate the press target.
- * After a real drag, {@link activatePostDragClickRepair} heals the next outside
- * DOM tap (sibling controls in the host — not Mapbox canvas).
+ * Gesture intent lives in the sheet machine (`pointerArm` / `pointerCommit`).
  */
 export function useSheetPointerHandlers(
   dispatch: (event: SheetMachineEvent) => SheetMachineResult,
   readScrollTop: () => number,
   readMachinePhase: () => SheetPhase | null,
-  scrollMomentum: {
-    recordScrollPointerSample: (clientY: number) => void;
-    releaseScrollMomentum: () => void;
-    cancelScrollMomentum: () => void;
-    clearScrollPointerTracking: () => void;
-  },
+  readPointerArm: () => SheetPointerArm | null,
 ): SheetPointerHandlers {
-  const sessionRef = useRef<PointerSession | null>(null);
+  const latchRef = useRef<DomPointerLatch | null>(null);
   const dispatchRef = useRef(dispatch);
   const readScrollTopRef = useRef(readScrollTop);
   const readMachinePhaseRef = useRef(readMachinePhase);
-  const scrollMomentumRef = useRef(scrollMomentum);
+  const readPointerArmRef = useRef(readPointerArm);
 
   dispatchRef.current = dispatch;
   readScrollTopRef.current = readScrollTop;
   readMachinePhaseRef.current = readMachinePhase;
-  scrollMomentumRef.current = scrollMomentum;
+  readPointerArmRef.current = readPointerArm;
 
-  const endPointerSession = useCallback(() => {
-    const session = sessionRef.current;
-    if (session) {
-      detachPointerTracking(session);
+  const endPointerLatch = useCallback(() => {
+    const latch = latchRef.current;
+    if (latch) {
+      detachPointerTracking(latch);
     }
-    sessionRef.current = null;
+    latchRef.current = null;
   }, []);
-
-  const applyMoveResult = useCallback(
-    (event: PointerEvent, result: SheetMachineResult) => {
-      const session = sessionRef.current;
-      if (!session) {
-        return;
-      }
-
-      const intent = result.state.gesture?.intent;
-      const scrolled = result.effects.some(
-        (effect) => effect.type === "scrollBody" && effect.deltaPx !== 0,
-      );
-
-      if (scrolled) {
-        session.hadEffect = true;
-      } else if (!isVisibleHeightAtRestingSnap(result.state)) {
-        session.hadEffect = true;
-      }
-
-      if (intent === "scroll") {
-        scrollMomentumRef.current.recordScrollPointerSample(event.clientY);
-      } else if (intent === "sheet") {
-        scrollMomentumRef.current.clearScrollPointerTracking();
-      }
-    },
-    [],
-  );
-
-  const commitPendingGesture = useCallback(
-    (event: PointerEvent): boolean => {
-      const session = sessionRef.current;
-      if (!session || session.pointerId !== event.pointerId) {
-        return false;
-      }
-
-      const downResult = dispatchRef.current({
-        type: "pointerDown",
-        pointerId: session.pointerId,
-        clientY: session.startClientY,
-        scrollTopPx: session.scrollTopPx,
-        surface: session.surface,
-      });
-
-      if (downResult.state.gesture === null) {
-        endPointerSession();
-        return false;
-      }
-
-      session.committed = true;
-      session.lastClientY = event.clientY;
-
-      const moveResult = dispatchRef.current({
-        type: "pointerMove",
-        pointerId: event.pointerId,
-        clientY: event.clientY,
-        scrollTopPx: readScrollTopRef.current(),
-      });
-
-      applyMoveResult(event, moveResult);
-      return true;
-    },
-    [applyMoveResult, endPointerSession],
-  );
 
   const finishPointer = useCallback(
     (event: PointerEvent) => {
-      const session = sessionRef.current;
-      if (!session || session.pointerId !== event.pointerId) {
+      const latch = latchRef.current;
+      if (!latch || latch.pointerId !== event.pointerId) {
         return;
       }
 
+      const arm = readPointerArmRef.current();
+      const wasCommitted = arm?.committed ?? false;
+      const hadEffect = arm?.hadEffect ?? false;
       const {
-        committed: wasCommitted,
-        hadEffect,
-        lastClientY,
-        pointerId,
         pressTarget,
         sheetBoundary,
         startClientY,
-      } = session;
+        lastClientY,
+        pointerId,
+      } = latch;
 
       if (wasCommitted) {
         dispatchRef.current({
           type: "pointerUp",
           pointerId: event.pointerId,
         });
-        scrollMomentumRef.current.releaseScrollMomentum();
       }
 
-      endPointerSession();
+      endPointerLatch();
 
       if (
         wasCommitted &&
@@ -279,6 +202,7 @@ export function useSheetPointerHandlers(
           pointerId,
           clientY: lastClientY,
           scrollTopPx: readScrollTopRef.current(),
+          timeMs: performance.now(),
         });
       }
 
@@ -301,55 +225,54 @@ export function useSheetPointerHandlers(
         if (tapTarget) {
           tapTarget.click();
         }
-        return;
-      }
-
-      if (wasCommitted) {
-        activatePostDragClickRepair(sheetBoundary);
       }
     },
-    [endPointerSession],
+    [endPointerLatch],
   );
 
-  const onPointerMove = useCallback(
-    (event: PointerEvent) => {
-      const session = sessionRef.current;
-      if (!session || session.pointerId !== event.pointerId) {
+  const onPointerMove = useCallback((event: PointerEvent) => {
+    const latch = latchRef.current;
+    if (!latch || latch.pointerId !== event.pointerId) {
+      return;
+    }
+
+    const arm = readPointerArmRef.current();
+    if (!arm?.committed) {
+      const deltaY = Math.abs(event.clientY - latch.startClientY);
+      if (deltaY < SHEET_AXIS_THRESHOLD_PX) {
         return;
       }
 
-      if (!session.committed) {
-        const deltaY = Math.abs(event.clientY - session.startClientY);
-        if (deltaY < SHEET_AXIS_THRESHOLD_PX) {
-          return;
-        }
-
-        if (session.phase === "watch") {
-          promoteWatchToSheet(session);
-        } else if (!session.pointerCaptured) {
-          session.pointerCaptured = acquireSheetPointerCapture(
-            session.sheetBoundary,
-            session.pointerId,
-          );
-        }
-
-        commitPendingGesture(event);
-        return;
+      if (latch.route === "watch") {
+        promoteWatchToSheet(latch);
+      } else if (!latch.pointerCaptured) {
+        latch.pointerCaptured = acquireSheetPointerCapture(
+          latch.sheetBoundary,
+          latch.pointerId,
+        );
       }
 
-      session.lastClientY = event.clientY;
-
-      const result = dispatchRef.current({
-        type: "pointerMove",
+      dispatchRef.current({
+        type: "pointerCommit",
         pointerId: event.pointerId,
         clientY: event.clientY,
         scrollTopPx: readScrollTopRef.current(),
+        timeMs: performance.now(),
       });
+      latch.lastClientY = event.clientY;
+      return;
+    }
 
-      applyMoveResult(event, result);
-    },
-    [applyMoveResult, commitPendingGesture],
-  );
+    latch.lastClientY = event.clientY;
+
+    dispatchRef.current({
+      type: "pointerMove",
+      pointerId: event.pointerId,
+      clientY: event.clientY,
+      scrollTopPx: readScrollTopRef.current(),
+      timeMs: performance.now(),
+    });
+  }, []);
 
   const onPointerDown = useCallback(
     (surface: SheetPointerSurface) =>
@@ -367,9 +290,19 @@ export function useSheetPointerHandlers(
           return;
         }
 
-        scrollMomentumRef.current.cancelScrollMomentum();
-        scrollMomentumRef.current.clearScrollPointerTracking();
-        endPointerSession();
+        endPointerLatch();
+
+        const interactivePressElement = getInteractivePressElement(
+          event.target,
+        );
+        const route: SheetPointerRoute = interactivePressElement
+          ? "watch"
+          : "sheet";
+        const routeElement = interactivePressElement ?? sheetBoundary;
+        const pointerCaptured =
+          route === "sheet" && shouldCapturePointerOnDown(event.target)
+            ? acquireSheetPointerCapture(sheetBoundary, event.pointerId)
+            : false;
 
         const tracking = {
           move: (pointerEvent: PointerEvent) => {
@@ -380,38 +313,33 @@ export function useSheetPointerHandlers(
           },
         };
 
-        const interactivePressElement = getInteractivePressElement(
-          event.target,
-        );
-        const phase: SessionPhase = interactivePressElement ? "watch" : "sheet";
-        const routeElement = interactivePressElement ?? sheetBoundary;
-        const pointerCaptured =
-          phase === "sheet" && shouldCapturePointerOnDown(event.target)
-            ? acquireSheetPointerCapture(sheetBoundary, event.pointerId)
-            : false;
-
-        sessionRef.current = {
+        latchRef.current = {
           pointerId: event.pointerId,
           pressTarget: event.target,
           sheetBoundary,
           routeElement,
-          phase,
+          route,
           startClientY: event.clientY,
           lastClientY: event.clientY,
-          scrollTopPx: readScrollTopRef.current(),
-          surface,
-          committed: false,
-          hadEffect: false,
           pointerCaptured,
           tracking,
         };
 
-        attachPointerTracking(sessionRef.current);
+        attachPointerTracking(latchRef.current);
+
+        dispatchRef.current({
+          type: "pointerArm",
+          pointerId: event.pointerId,
+          clientY: event.clientY,
+          scrollTopPx: readScrollTopRef.current(),
+          surface,
+          route,
+        });
       },
-    [endPointerSession, finishPointer, onPointerMove],
+    [endPointerLatch, finishPointer, onPointerMove],
   );
 
-  useEffect(() => () => endPointerSession(), [endPointerSession]);
+  useEffect(() => () => endPointerLatch(), [endPointerLatch]);
 
   return {
     onChromePointerDown: onPointerDown("chrome"),

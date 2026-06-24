@@ -1,4 +1,8 @@
 import {
+  computeScrollReleaseVelocityPxPerMs,
+  shouldStartScrollMomentum,
+} from "../hooks/sheet-body-scroll-momentum";
+import {
   canBodyScroll,
   FULL_HEIGHT_EPSILON_PX,
   SCROLL_TOP_EPSILON_PX,
@@ -11,19 +15,31 @@ import {
   snapHeightFromPanDelta,
 } from "../layout/snap-math";
 import {
+  type ScrollPointerSample,
   SHEET_AXIS_THRESHOLD_PX,
   type SheetGesture,
   type SheetGestureIntent,
   type SheetMachineState,
+  type SheetPointerArm,
+  type SheetPointerRoute,
   type SheetPointerSurface,
 } from "./state";
 
-export type SheetMachinePointerDown = {
-  type: "pointerDown";
+export type SheetMachinePointerArm = {
+  type: "pointerArm";
   pointerId: number;
   clientY: number;
   scrollTopPx: number;
   surface: SheetPointerSurface;
+  route: SheetPointerRoute;
+};
+
+export type SheetMachinePointerCommit = {
+  type: "pointerCommit";
+  pointerId: number;
+  clientY: number;
+  scrollTopPx: number;
+  timeMs: number;
 };
 
 export type SheetMachinePointerMove = {
@@ -31,6 +47,7 @@ export type SheetMachinePointerMove = {
   pointerId: number;
   clientY: number;
   scrollTopPx: number;
+  timeMs: number;
 };
 
 export type SheetMachinePointerUp = {
@@ -55,7 +72,8 @@ export type SheetMachineSettleComplete = {
 };
 
 export type SheetMachineEvent =
-  | SheetMachinePointerDown
+  | SheetMachinePointerArm
+  | SheetMachinePointerCommit
   | SheetMachinePointerMove
   | SheetMachinePointerUp
   | SheetMachineMeasure
@@ -73,7 +91,10 @@ export type SheetMachineEffect =
       heightPx: number;
       bodyScrollEnabled: boolean;
     }
-  | { type: "completeSettleImmediate" };
+  | { type: "completeSettleImmediate" }
+  | { type: "cancelScrollMomentum" }
+  | { type: "startScrollMomentum"; velocityPxPerMs: number }
+  | { type: "activatePostDragClickRepair" };
 
 export type SheetMachineResult = {
   state: SheetMachineState;
@@ -197,8 +218,10 @@ export function reduceSheetMachine(
         },
         effects: [],
       };
-    case "pointerDown":
-      return reducePointerDown(state, event);
+    case "pointerArm":
+      return reducePointerArm(state, event);
+    case "pointerCommit":
+      return reducePointerCommit(state, event);
     case "pointerMove":
       return reducePointerMove(state, event);
     case "pointerUp":
@@ -282,53 +305,164 @@ function reduceSetSnap(
       restingSnap: event.snap,
       visibleHeightPx: heightPx,
       gesture: null,
+      pointerArm: null,
+      scrollPointerSamples: [],
     },
     effects: settlingEffects(state, heightPx, effects),
   };
 }
 
-function reducePointerDown(
+function createPointerArm(args: {
+  pointerId: number;
+  clientY: number;
+  scrollTopPx: number;
+  surface: SheetPointerSurface;
+  route: SheetPointerRoute;
+}): SheetPointerArm {
+  return {
+    pointerId: args.pointerId,
+    startClientY: args.clientY,
+    scrollTopPx: args.scrollTopPx,
+    surface: args.surface,
+    route: args.route,
+    committed: false,
+    hadEffect: false,
+  };
+}
+
+function markPointerHadEffect(state: SheetMachineState): SheetMachineState {
+  if (!state.pointerArm || state.pointerArm.hadEffect) {
+    return state;
+  }
+  return {
+    ...state,
+    pointerArm: { ...state.pointerArm, hadEffect: true },
+  };
+}
+
+function appendScrollSample(
   state: SheetMachineState,
-  event: SheetMachinePointerDown,
+  sample: ScrollPointerSample,
+): SheetMachineState {
+  const cutoffMs = sample.timeMs - 120;
+  const scrollPointerSamples = [...state.scrollPointerSamples, sample].filter(
+    (item) => item.timeMs >= cutoffMs,
+  );
+  return { ...state, scrollPointerSamples };
+}
+
+function clearScrollSamples(state: SheetMachineState): SheetMachineState {
+  if (state.scrollPointerSamples.length === 0) {
+    return state;
+  }
+  return { ...state, scrollPointerSamples: [] };
+}
+
+function createGestureForArm(
+  state: SheetMachineState,
+  arm: SheetPointerArm,
+): SheetGesture {
+  if (arm.surface === "chrome") {
+    return createGesture({
+      pointerId: arm.pointerId,
+      clientY: arm.startClientY,
+      startHeightPx: state.visibleHeightPx,
+      intent: "sheet",
+      surface: "chrome",
+    });
+  }
+
+  const canScroll = scrollEnabled(state);
+  const intent: SheetGestureIntent = canScroll
+    ? arm.scrollTopPx <= SCROLL_TOP_EPSILON_PX
+      ? "pendingAxis"
+      : "scroll"
+    : "sheet";
+
+  return createGesture({
+    pointerId: arm.pointerId,
+    clientY: arm.startClientY,
+    startHeightPx: state.visibleHeightPx,
+    intent,
+    surface: "body",
+  });
+}
+
+function scrollMomentumEffects(state: SheetMachineState): SheetMachineEffect[] {
+  const velocityPxPerMs = computeScrollReleaseVelocityPxPerMs(
+    state.scrollPointerSamples,
+  );
+  if (!shouldStartScrollMomentum(velocityPxPerMs)) {
+    return [];
+  }
+  return [{ type: "startScrollMomentum", velocityPxPerMs }];
+}
+
+function reducePointerArm(
+  state: SheetMachineState,
+  event: SheetMachinePointerArm,
 ): SheetMachineResult {
   if (state.phase === "dragging" || state.phase === "settling") {
     return { state, effects: [] };
   }
 
-  if (event.surface === "chrome") {
-    const gesture = createGesture({
-      pointerId: event.pointerId,
-      clientY: event.clientY,
-      startHeightPx: state.visibleHeightPx,
-      intent: "sheet",
-      surface: "chrome",
-    });
-
-    return {
-      state: { ...state, phase: "idle", gesture },
-      effects: [],
-    };
-  }
-
-  const canScroll = scrollEnabled(state);
-  const intent: SheetGestureIntent = canScroll
-    ? event.scrollTopPx <= SCROLL_TOP_EPSILON_PX
-      ? "pendingAxis"
-      : "scroll"
-    : "sheet";
-
-  const gesture = createGesture({
+  const arm = createPointerArm({
     pointerId: event.pointerId,
     clientY: event.clientY,
-    startHeightPx: state.visibleHeightPx,
-    intent,
-    surface: "body",
+    scrollTopPx: event.scrollTopPx,
+    surface: event.surface,
+    route: event.route,
   });
 
+  const gesture =
+    event.route === "sheet" ? createGestureForArm(state, arm) : null;
+
   return {
-    state: { ...state, phase: "idle", gesture },
-    effects: [],
+    state: {
+      ...clearScrollSamples(state),
+      phase: "idle",
+      gesture,
+      pointerArm: arm,
+    },
+    effects: [{ type: "cancelScrollMomentum" }],
   };
+}
+
+function reducePointerCommit(
+  state: SheetMachineState,
+  event: SheetMachinePointerCommit,
+): SheetMachineResult {
+  const arm = state.pointerArm;
+  if (!arm || arm.pointerId !== event.pointerId || arm.committed) {
+    return { state, effects: [] };
+  }
+
+  const totalDeltaY = Math.abs(event.clientY - arm.startClientY);
+  if (totalDeltaY < SHEET_AXIS_THRESHOLD_PX) {
+    return { state, effects: [] };
+  }
+
+  let nextState: SheetMachineState = {
+    ...state,
+    pointerArm: { ...arm, committed: true },
+  };
+
+  if (arm.route === "watch") {
+    const gesture = createGestureForArm(nextState, arm);
+    nextState = { ...nextState, gesture };
+  }
+
+  if (nextState.gesture === null) {
+    return { state, effects: [] };
+  }
+
+  return reducePointerMove(nextState, {
+    type: "pointerMove",
+    pointerId: event.pointerId,
+    clientY: event.clientY,
+    scrollTopPx: event.scrollTopPx,
+    timeMs: event.timeMs,
+  });
 }
 
 function reduceArmedMove(
@@ -365,6 +499,33 @@ function reduceArmedMove(
   );
 }
 
+function finalizePointerMoveResult(
+  _previous: SheetMachineState,
+  event: SheetMachinePointerMove,
+  result: SheetMachineResult,
+): SheetMachineResult {
+  let nextState = result.state;
+  const intent = nextState.gesture?.intent;
+
+  if (intent === "scroll") {
+    nextState = appendScrollSample(nextState, {
+      timeMs: event.timeMs,
+      clientY: event.clientY,
+    });
+  } else if (intent === "sheet") {
+    nextState = clearScrollSamples(nextState);
+  }
+
+  const scrolled = result.effects.some(
+    (effect) => effect.type === "scrollBody" && effect.deltaPx !== 0,
+  );
+  if (scrolled || !isVisibleHeightAtRestingSnap(nextState)) {
+    nextState = markPointerHadEffect(nextState);
+  }
+
+  return { state: nextState, effects: result.effects };
+}
+
 function reducePointerMove(
   state: SheetMachineState,
   event: SheetMachinePointerMove,
@@ -374,25 +535,20 @@ function reducePointerMove(
     return { state, effects: [] };
   }
 
+  let result: SheetMachineResult;
   if (state.phase === "idle") {
-    return reduceArmedMove(state, event, gesture);
-  }
-
-  const effects: SheetMachineEffect[] = [];
-
-  if (gesture.intent === "pendingAxis") {
-    return withDragFrameEffects(
-      reducePendingAxisMove(state, event, gesture, effects),
+    result = reduceArmedMove(state, event, gesture);
+  } else if (gesture.intent === "pendingAxis") {
+    result = withDragFrameEffects(
+      reducePendingAxisMove(state, event, gesture, []),
     );
+  } else if (gesture.intent === "scroll") {
+    result = withDragFrameEffects(reduceScrollMove(state, event, gesture, []));
+  } else {
+    result = withDragFrameEffects(reduceSheetMove(state, event, gesture, []));
   }
 
-  if (gesture.intent === "scroll") {
-    return withDragFrameEffects(
-      reduceScrollMove(state, event, gesture, effects),
-    );
-  }
-
-  return withDragFrameEffects(reduceSheetMove(state, event, gesture, effects));
+  return finalizePointerMoveResult(state, event, result);
 }
 
 function reducePendingAxisMove(
@@ -521,24 +677,40 @@ function reducePointerUp(
     return { state, effects: [] };
   }
 
+  const hadEffect = state.pointerArm?.hadEffect ?? false;
+  const clearArmState = (next: SheetMachineState): SheetMachineState => ({
+    ...next,
+    gesture: null,
+    pointerArm: null,
+    scrollPointerSamples: [],
+  });
+
   if (state.phase === "idle") {
     return {
-      state: { ...state, gesture: null },
+      state: clearArmState(state),
       effects: [],
     };
   }
 
   if (gesture.intent !== "sheet") {
+    const effects: SheetMachineEffect[] = [
+      { type: "notifyDragEnd" },
+      ...scrollMomentumEffects(state),
+    ];
     return {
-      state: { ...state, phase: "idle", gesture: null },
-      effects: [{ type: "notifyDragEnd" }],
+      state: clearArmState({ ...state, phase: "idle" }),
+      effects,
     };
   }
 
   if (isVisibleHeightAtRestingSnap(state)) {
+    const effects: SheetMachineEffect[] = [{ type: "notifyDragEnd" }];
+    if (hadEffect) {
+      effects.push({ type: "activatePostDragClickRepair" });
+    }
     return {
-      state: { ...state, phase: "idle", gesture: null },
-      effects: [{ type: "notifyDragEnd" }],
+      state: clearArmState({ ...state, phase: "idle" }),
+      effects,
     };
   }
 
@@ -555,15 +727,17 @@ function reducePointerUp(
   if (snap !== state.restingSnap) {
     effects.unshift({ type: "notifySnapChange", snap });
   }
+  if (hadEffect) {
+    effects.push({ type: "activatePostDragClickRepair" });
+  }
 
   return {
-    state: {
+    state: clearArmState({
       ...state,
       phase: "settling",
       restingSnap: snap,
       visibleHeightPx: heightPx,
-      gesture: null,
-    },
+    }),
     effects,
   };
 }

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { SheetContextProvider } from "./context/sheet-context";
 import { useSheetHostEl } from "./context/sheet-host-context";
+import { activatePostDragClickRepair } from "./gesture/activate-post-drag-click-repair";
 import { useSheetPointerHandlers } from "./gesture/use-sheet-pointer-handlers";
 import { useSheetBodyScroll } from "./hooks/use-sheet-body-scroll";
 import { useSheetMeasure } from "./hooks/use-sheet-measure";
@@ -58,6 +59,11 @@ export type SheetProps = {
    * During CSS height transitions, read `.sheet` geometry for in-between heights.
    */
   onLayoutFrameChange?: (frame: SheetLayoutFrameChange) => void;
+  /**
+   * Optional filter for post-drag outside-click repair (e.g. skip map canvas targets
+   * that use their own pointer pipeline).
+   */
+  shouldSkipPostDragOutsideClickTarget?: (target: Element) => boolean;
 };
 
 export function Sheet({
@@ -71,6 +77,7 @@ export function Sheet({
   onSnapHeightsChange,
   onSnapSettled,
   onLayoutFrameChange,
+  shouldSkipPostDragOutsideClickTarget,
 }: SheetProps) {
   const hostEl = useSheetHostEl();
   const resolvedHalfSnap = normalizeHalfSnapFraction(halfSnapFraction);
@@ -91,6 +98,11 @@ export function Sheet({
   onSnapSettledRef.current = onSnapSettled;
   const onLayoutFrameChangeRef = useRef(onLayoutFrameChange);
   onLayoutFrameChangeRef.current = onLayoutFrameChange;
+  const shouldSkipPostDragOutsideClickTargetRef = useRef(
+    shouldSkipPostDragOutsideClickTarget,
+  );
+  shouldSkipPostDragOutsideClickTargetRef.current =
+    shouldSkipPostDragOutsideClickTarget;
 
   const dispatchRef = useRef<SheetMachineDispatch | null>(null);
   const hookStateRef = useRef<RefObject<SheetMachineState | null> | null>(null);
@@ -106,6 +118,10 @@ export function Sheet({
   emitLayoutFrameChangeRef.current = emitLayoutFrameChange;
 
   const applyBodyScrollDeltaRef = useRef<(deltaPx: number) => void>(() => {});
+  const startScrollMomentumRef = useRef<(velocityPxPerMs: number) => void>(
+    () => {},
+  );
+  const cancelScrollMomentumRef = useRef<() => void>(() => {});
 
   const runEffect = useCallback((effect: SheetMachineEffect) => {
     switch (effect.type) {
@@ -146,6 +162,21 @@ export function Sheet({
         }
         break;
       }
+      case "cancelScrollMomentum":
+        cancelScrollMomentumRef.current();
+        break;
+      case "startScrollMomentum":
+        startScrollMomentumRef.current(effect.velocityPxPerMs);
+        break;
+      case "activatePostDragClickRepair": {
+        const slide = sheetSlideRef.current;
+        if (slide) {
+          activatePostDragClickRepair(slide, {
+            shouldSkipTarget: shouldSkipPostDragOutsideClickTargetRef.current,
+          });
+        }
+        break;
+      }
     }
   }, []);
 
@@ -165,11 +196,12 @@ export function Sheet({
     onLayoutMeasureRef,
   });
 
-  const { state, stateRef, isReady, dispatch, readPhase } = useSheetMachine({
-    restingSnap,
-    controlledSnap: snap,
-    runEffect,
-  });
+  const { state, stateRef, isReady, dispatch, readPhase, readPointerArm } =
+    useSheetMachine({
+      restingSnap,
+      controlledSnap: snap,
+      runEffect,
+    });
 
   dispatchRef.current = dispatch;
   hookStateRef.current = stateRef;
@@ -187,28 +219,13 @@ export function Sheet({
     readScrollTop,
     applyBodyScrollDelta,
     registerBodyEl,
-    recordScrollPointerSample,
-    releaseScrollMomentum,
+    startScrollMomentum,
     cancelScrollMomentum,
-    clearScrollPointerTracking,
   } = useSheetBodyScroll(state?.restingSnap ?? restingSnap);
 
   applyBodyScrollDeltaRef.current = applyBodyScrollDelta;
-
-  const scrollMomentum = useMemo(
-    () => ({
-      recordScrollPointerSample,
-      releaseScrollMomentum,
-      cancelScrollMomentum,
-      clearScrollPointerTracking,
-    }),
-    [
-      cancelScrollMomentum,
-      clearScrollPointerTracking,
-      recordScrollPointerSample,
-      releaseScrollMomentum,
-    ],
-  );
+  startScrollMomentumRef.current = startScrollMomentum;
+  cancelScrollMomentumRef.current = cancelScrollMomentum;
 
   const registerBodyRoot = useCallback(
     (node: HTMLDivElement | null) => {
@@ -222,7 +239,7 @@ export function Sheet({
     dispatch,
     readScrollTop,
     readPhase,
-    scrollMomentum,
+    readPointerArm,
   );
 
   const stateRefForSettle = useRef(state);

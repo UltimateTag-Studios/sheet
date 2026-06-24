@@ -5,10 +5,13 @@ export type {
 } from "./machine";
 export { reduceSheetMachine } from "./machine";
 export type {
+  ScrollPointerSample,
   SheetGesture,
   SheetGestureIntent,
   SheetMachineState,
   SheetPhase,
+  SheetPointerArm,
+  SheetPointerRoute,
   SheetPointerSurface,
 } from "./state";
 export {

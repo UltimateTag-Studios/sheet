@@ -21,11 +21,30 @@ export type SheetGesture = {
   lastClientY: number;
 };
 
+export type SheetPointerRoute = "watch" | "sheet";
+
+export type SheetPointerArm = {
+  pointerId: number;
+  startClientY: number;
+  scrollTopPx: number;
+  surface: SheetPointerSurface;
+  route: SheetPointerRoute;
+  committed: boolean;
+  hadEffect: boolean;
+};
+
+export type ScrollPointerSample = {
+  timeMs: number;
+  clientY: number;
+};
+
 export type SheetMachineState = {
   phase: SheetPhase;
   visibleHeightPx: number;
   restingSnap: SheetSnap;
   gesture: SheetGesture | null;
+  pointerArm: SheetPointerArm | null;
+  scrollPointerSamples: ScrollPointerSample[];
   collapsedHeightPx: number;
   halfHeightPx: number;
   fullHeightPx: number;
@@ -49,6 +68,8 @@ export function createInitialSheetMachineState(args: {
     ),
     restingSnap: args.restingSnap,
     gesture: null,
+    pointerArm: null,
+    scrollPointerSamples: [],
     collapsedHeightPx: args.collapsedHeightPx,
     halfHeightPx: args.halfHeightPx,
     fullHeightPx: args.fullHeightPx,
