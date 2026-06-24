@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createInitialSheetMachineState } from "../machine/sheet-machine";
+import { createInitialSheetMachineState } from "../machine";
 import { toSheetLayoutFrameChange } from "./sheet-layout-frame-change";
 
 describe("toSheetLayoutFrameChange", () => {

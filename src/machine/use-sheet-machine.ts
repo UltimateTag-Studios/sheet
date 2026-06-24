@@ -1,41 +1,42 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  type RefObject,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 import type { SheetSnap } from "../layout/snap-math";
 import {
-  createInitialSheetMachineState,
   reduceSheetMachine,
+  type SheetMachineEffect,
   type SheetMachineEvent,
   type SheetMachineResult,
+} from "./machine";
+import {
+  createInitialSheetMachineState,
   type SheetMachineState,
   type SheetPhase,
-} from "../machine/sheet-machine";
+} from "./state";
+
+export type SheetMachineDispatch = (
+  event: SheetMachineEvent,
+) => SheetMachineResult;
+
+export type SheetEffectRunner = (effect: SheetMachineEffect) => void;
 
 export type UseSheetMachineOptions = {
   restingSnap: SheetSnap;
   controlledSnap?: SheetSnap;
-  onSnapChange?: (snap: SheetSnap) => void;
-  onDragInteractionChange?: (isDragging: boolean) => void;
-  /** Called after every dispatch — used for direct DOM updates during drag. */
-  onResult?: (event: SheetMachineEvent, result: SheetMachineResult) => void;
+  runEffect: SheetEffectRunner;
 };
 
 function applyEffects(
-  effects: SheetMachineResult["effects"],
-  callbacks: {
-    onSnapChange?: (snap: SheetSnap) => void;
-    onDragInteractionChange?: (isDragging: boolean) => void;
-  },
+  effects: SheetMachineEffect[],
+  runEffect: SheetEffectRunner,
 ) {
   for (const effect of effects) {
-    if (effect.type === "notifySnapChange") {
-      callbacks.onSnapChange?.(effect.snap);
-    }
-    if (effect.type === "notifyDragStart") {
-      callbacks.onDragInteractionChange?.(true);
-    }
-    if (effect.type === "notifyDragEnd") {
-      callbacks.onDragInteractionChange?.(false);
-    }
+    runEffect(effect);
   }
 }
 
@@ -66,6 +67,10 @@ function ignoredGestureResult(restingSnap: SheetSnap): SheetMachineResult {
   };
 }
 
+/**
+ * Skip React re-renders on continuous drag moves — `stateRef` stays authoritative;
+ * consumers that need live geometry use machine effects (`syncDragFrame`) instead.
+ */
 function shouldSyncReactState(
   event: SheetMachineEvent,
   previous: SheetMachineState,
@@ -81,20 +86,16 @@ function shouldSyncReactState(
 export function useSheetMachine({
   restingSnap,
   controlledSnap,
-  onSnapChange,
-  onDragInteractionChange,
-  onResult,
+  runEffect,
 }: UseSheetMachineOptions): {
   state: SheetMachineState | null;
+  stateRef: RefObject<SheetMachineState | null>;
   isReady: boolean;
-  dispatch: (event: SheetMachineEvent) => SheetMachineResult;
+  dispatch: SheetMachineDispatch;
   readPhase: () => SheetPhase | null;
 } {
-  const callbacksRef = useRef({ onSnapChange, onDragInteractionChange });
-  callbacksRef.current = { onSnapChange, onDragInteractionChange };
-
-  const onResultRef = useRef(onResult);
-  onResultRef.current = onResult;
+  const runEffectRef = useRef(runEffect);
+  runEffectRef.current = runEffect;
 
   const restingSnapRef = useRef(restingSnap);
   restingSnapRef.current = restingSnap;
@@ -111,16 +112,14 @@ export function useSheetMachine({
 
         const initial = bootstrapFromMeasure(restingSnapRef.current, event);
         stateRef.current = initial;
-        onResultRef.current?.(event, { state: initial, effects: [] });
         setState(initial);
         return { state: initial, effects: [] };
       }
 
       const previous = stateRef.current;
       const result = reduceSheetMachine(previous, event);
-      applyEffects(result.effects, callbacksRef.current);
       stateRef.current = result.state;
-      onResultRef.current?.(event, result);
+      applyEffects(result.effects, (effect) => runEffectRef.current(effect));
       if (shouldSyncReactState(event, previous, result.state)) {
         setState(result.state);
       }
@@ -148,6 +147,7 @@ export function useSheetMachine({
 
   return {
     state,
+    stateRef: stateRef as RefObject<SheetMachineState | null>,
     isReady: state !== null,
     dispatch,
     readPhase: () => stateRef.current?.phase ?? null,

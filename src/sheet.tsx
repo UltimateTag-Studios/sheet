@@ -1,9 +1,8 @@
-import type { ReactNode } from "react";
+import type { ReactNode, RefObject } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { SheetContextProvider } from "./context/sheet-context";
 import { useSheetHostEl } from "./context/sheet-host-context";
-import { useSheetMachine } from "./gesture/use-sheet-machine";
 import { useSheetPointerHandlers } from "./gesture/use-sheet-pointer-handlers";
 import { useSheetBodyScroll } from "./hooks/use-sheet-body-scroll";
 import { useSheetMeasure } from "./hooks/use-sheet-measure";
@@ -22,7 +21,12 @@ import { readVisibleSheetHeightPx } from "./layout/snap-heights";
 import type { SheetSnap } from "./layout/snap-math";
 import { applySheetSlideFrame } from "./layout/sync-sheet-dom-frame";
 import type { SheetSnapHeights } from "./layout/use-snap-heights";
-import type { SheetMachineState } from "./machine/sheet-machine";
+import type {
+  SheetMachineDispatch,
+  SheetMachineEffect,
+  SheetMachineState,
+} from "./machine";
+import { useSheetMachine } from "./machine";
 
 export type { SheetLayoutFrameChange };
 
@@ -78,6 +82,73 @@ export function Sheet({
   const setCanBodyScrollEnabledRef = useRef<
     (value: boolean | ((current: boolean) => boolean)) => void
   >(() => {});
+
+  const onSnapChangeRef = useRef(onSnapChange);
+  onSnapChangeRef.current = onSnapChange;
+  const onDragInteractionChangeRef = useRef(onDragInteractionChange);
+  onDragInteractionChangeRef.current = onDragInteractionChange;
+  const onSnapSettledRef = useRef(onSnapSettled);
+  onSnapSettledRef.current = onSnapSettled;
+  const onLayoutFrameChangeRef = useRef(onLayoutFrameChange);
+  onLayoutFrameChangeRef.current = onLayoutFrameChange;
+
+  const dispatchRef = useRef<SheetMachineDispatch | null>(null);
+  const hookStateRef = useRef<RefObject<SheetMachineState | null> | null>(null);
+
+  const emitLayoutFrameChange = useCallback(
+    (machineState: SheetMachineState) => {
+      onLayoutFrameChangeRef.current?.(toSheetLayoutFrameChange(machineState));
+    },
+    [],
+  );
+
+  const emitLayoutFrameChangeRef = useRef(emitLayoutFrameChange);
+  emitLayoutFrameChangeRef.current = emitLayoutFrameChange;
+
+  const applyBodyScrollDeltaRef = useRef<(deltaPx: number) => void>(() => {});
+
+  const runEffect = useCallback((effect: SheetMachineEffect) => {
+    switch (effect.type) {
+      case "notifySnapChange":
+        onSnapChangeRef.current?.(effect.snap);
+        break;
+      case "notifyDragStart":
+        onDragInteractionChangeRef.current?.(true);
+        break;
+      case "notifyDragEnd":
+        onDragInteractionChangeRef.current?.(false);
+        break;
+      case "scrollBody":
+        applyBodyScrollDeltaRef.current(effect.deltaPx);
+        break;
+      case "syncDragFrame": {
+        const slide = sheetSlideRef.current;
+        if (slide) {
+          applySheetSlideFrame(slide, effect.heightPx, "dragging", false);
+        }
+        canBodyScrollRef.current = effect.bodyScrollEnabled;
+        setCanBodyScrollEnabledRef.current((current) =>
+          current === effect.bodyScrollEnabled
+            ? current
+            : effect.bodyScrollEnabled,
+        );
+        const machineState = hookStateRef.current?.current ?? null;
+        if (machineState) {
+          emitLayoutFrameChangeRef.current(machineState);
+        }
+        break;
+      }
+      case "completeSettleImmediate": {
+        const result = dispatchRef.current?.({ type: "settleComplete" });
+        if (result) {
+          emitLayoutFrameChangeRef.current(result.state);
+          onSnapSettledRef.current?.(result.state.restingSnap);
+        }
+        break;
+      }
+    }
+  }, []);
+
   const onLayoutMeasureRef = useRef<
     ((heights: SheetSnapHeights) => void) | undefined
   >(undefined);
@@ -94,52 +165,14 @@ export function Sheet({
     onLayoutMeasureRef,
   });
 
-  const onLayoutFrameChangeRef = useRef(onLayoutFrameChange);
-  onLayoutFrameChangeRef.current = onLayoutFrameChange;
-
-  const emitLayoutFrameChange = useCallback(
-    (machineState: SheetMachineState) => {
-      onLayoutFrameChangeRef.current?.(toSheetLayoutFrameChange(machineState));
-    },
-    [],
-  );
-
-  const emitLayoutFrameChangeRef = useRef(emitLayoutFrameChange);
-  emitLayoutFrameChangeRef.current = emitLayoutFrameChange;
-
-  const { state, isReady, dispatch, readPhase } = useSheetMachine({
+  const { state, stateRef, isReady, dispatch, readPhase } = useSheetMachine({
     restingSnap,
     controlledSnap: snap,
-    onSnapChange,
-    onDragInteractionChange,
-    onResult: (event, result) => {
-      if (event.type !== "pointerMove" || result.state.phase !== "dragging") {
-        return;
-      }
-
-      const slide = sheetSlideRef.current;
-      if (slide) {
-        applySheetSlideFrame(
-          slide,
-          result.state.visibleHeightPx,
-          "dragging",
-          false,
-        );
-      }
-      emitLayoutFrameChangeRef.current(result.state);
-
-      const nextCanBodyScroll = canBodyScroll({
-        sheetSnap: result.state.restingSnap,
-        visibleHeightPx: result.state.visibleHeightPx,
-        fullHeightPx: result.state.fullHeightPx,
-        isDragging: true,
-      });
-      canBodyScrollRef.current = nextCanBodyScroll;
-      setCanBodyScrollEnabledRef.current((current) =>
-        current === nextCanBodyScroll ? current : nextCanBodyScroll,
-      );
-    },
+    runEffect,
   });
+
+  dispatchRef.current = dispatch;
+  hookStateRef.current = stateRef;
 
   onLayoutMeasureRef.current = (heights) => {
     dispatch({
@@ -159,6 +192,8 @@ export function Sheet({
     cancelScrollMomentum,
     clearScrollPointerTracking,
   } = useSheetBodyScroll(state?.restingSnap ?? restingSnap);
+
+  applyBodyScrollDeltaRef.current = applyBodyScrollDelta;
 
   const scrollMomentum = useMemo(
     () => ({
@@ -187,12 +222,8 @@ export function Sheet({
     dispatch,
     readScrollTop,
     readPhase,
-    applyBodyScrollDelta,
     scrollMomentum,
   );
-
-  const onSnapSettledRef = useRef(onSnapSettled);
-  onSnapSettledRef.current = onSnapSettled;
 
   const stateRefForSettle = useRef(state);
   stateRefForSettle.current = state;
@@ -213,10 +244,7 @@ export function Sheet({
     onSettleComplete: () => {
       const result = dispatch({ type: "settleComplete" });
       emitLayoutFrameChange(result.state);
-      const snap = result.state.restingSnap;
-      if (snap) {
-        onSnapSettledRef.current?.(snap);
-      }
+      onSnapSettledRef.current?.(result.state.restingSnap);
     },
     onLayoutFrameApplied: notifyRestLayoutFrame,
   });

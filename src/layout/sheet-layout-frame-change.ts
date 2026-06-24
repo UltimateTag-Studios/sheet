@@ -1,4 +1,4 @@
-import type { SheetMachineState, SheetPhase } from "../machine/sheet-machine";
+import type { SheetMachineState, SheetPhase } from "../machine";
 import type { SheetSnap } from "./snap-math";
 
 /** Authoritative sheet slide height from the gesture machine (not CSS transition samples). */

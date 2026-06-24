@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createInitialSheetMachineState } from "../machine/sheet-machine";
+import { createInitialSheetMachineState } from "../machine";
 import { isVisibleHeightAtRestingSnap } from "./snap-math";
 
 describe("isVisibleHeightAtRestingSnap", () => {

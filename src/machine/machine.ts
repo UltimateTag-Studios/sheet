@@ -1,4 +1,5 @@
 import {
+  canBodyScroll,
   FULL_HEIGHT_EPSILON_PX,
   SCROLL_TOP_EPSILON_PX,
 } from "../layout/scroll-mode";
@@ -9,39 +10,13 @@ import {
   type SheetSnap,
   snapHeightFromPanDelta,
 } from "../layout/snap-math";
-
-/**
- * Sheet gesture state machine.
- *
- * Body pointer intents: sheet (move height) | scroll (content delta) | pendingAxis (disambiguate at full + scroll top).
- * Chrome pointers always use sheet intent. One continuous drag can transition between intents.
- */
-export type SheetPhase = "idle" | "dragging" | "settling";
-
-export type SheetGestureIntent = "pendingAxis" | "sheet" | "scroll";
-
-export type SheetPointerSurface = "chrome" | "body";
-
-export type SheetGesture = {
-  pointerId: number;
-  startClientY: number;
-  startHeightPx: number;
-  intent: SheetGestureIntent;
-  surface: SheetPointerSurface;
-  lastClientY: number;
-};
-
-export type SheetMachineState = {
-  phase: SheetPhase;
-  visibleHeightPx: number;
-  restingSnap: SheetSnap;
-  gesture: SheetGesture | null;
-  collapsedHeightPx: number;
-  halfHeightPx: number;
-  fullHeightPx: number;
-};
-
-export const SHEET_AXIS_THRESHOLD_PX = 8;
+import {
+  SHEET_AXIS_THRESHOLD_PX,
+  type SheetGesture,
+  type SheetGestureIntent,
+  type SheetMachineState,
+  type SheetPointerSurface,
+} from "./state";
 
 export type SheetMachinePointerDown = {
   type: "pointerDown";
@@ -90,13 +65,19 @@ export type SheetMachineEvent =
 export type SheetMachineEffect =
   | { type: "notifySnapChange"; snap: SheetSnap }
   | { type: "notifyDragStart" }
-  | { type: "notifyDragEnd" };
+  | { type: "notifyDragEnd" }
+  /** Positive values scroll content down (increase scrollTop). */
+  | { type: "scrollBody"; deltaPx: number }
+  | {
+      type: "syncDragFrame";
+      heightPx: number;
+      bodyScrollEnabled: boolean;
+    }
+  | { type: "completeSettleImmediate" };
 
 export type SheetMachineResult = {
   state: SheetMachineState;
   effects: SheetMachineEffect[];
-  /** Positive values scroll content down (increase scrollTop). */
-  bodyScrollDeltaPx?: number;
 };
 
 function scrollEnabled(state: SheetMachineState): boolean {
@@ -152,26 +133,42 @@ function beginScrollGesture(
   };
 }
 
-export function createInitialSheetMachineState(args: {
-  restingSnap: SheetSnap;
-  collapsedHeightPx: number;
-  halfHeightPx: number;
-  fullHeightPx: number;
-}): SheetMachineState {
+function bodyScrollEnabled(state: SheetMachineState): boolean {
+  return canBodyScroll({
+    sheetSnap: state.restingSnap,
+    visibleHeightPx: state.visibleHeightPx,
+    fullHeightPx: state.fullHeightPx,
+    isDragging: true,
+  });
+}
+
+function withDragFrameEffects(result: SheetMachineResult): SheetMachineResult {
+  if (result.state.phase !== "dragging") {
+    return result;
+  }
+
   return {
-    phase: "idle",
-    visibleHeightPx: heightForSnap(
-      args.restingSnap,
-      args.collapsedHeightPx,
-      args.halfHeightPx,
-      args.fullHeightPx,
-    ),
-    restingSnap: args.restingSnap,
-    gesture: null,
-    collapsedHeightPx: args.collapsedHeightPx,
-    halfHeightPx: args.halfHeightPx,
-    fullHeightPx: args.fullHeightPx,
+    state: result.state,
+    effects: [
+      ...result.effects,
+      {
+        type: "syncDragFrame",
+        heightPx: result.state.visibleHeightPx,
+        bodyScrollEnabled: bodyScrollEnabled(result.state),
+      },
+    ],
   };
+}
+
+function settlingEffects(
+  state: SheetMachineState,
+  heightPx: number,
+  effects: SheetMachineEffect[],
+): SheetMachineEffect[] {
+  if (Math.round(heightPx) === Math.round(state.visibleHeightPx)) {
+    return [...effects, { type: "completeSettleImmediate" }];
+  }
+  return effects;
 }
 
 export function reduceSheetMachine(
@@ -286,7 +283,7 @@ function reduceSetSnap(
       visibleHeightPx: heightPx,
       gesture: null,
     },
-    effects,
+    effects: settlingEffects(state, heightPx, effects),
   };
 }
 
@@ -351,15 +348,21 @@ function reduceArmedMove(
   const effects: SheetMachineEffect[] = [];
 
   if (gesture.intent === "pendingAxis") {
-    return reducePendingAxisMove(draggingState, event, gesture, effects);
+    return withDragFrameEffects(
+      reducePendingAxisMove(draggingState, event, gesture, effects),
+    );
   }
 
   if (gesture.intent === "scroll") {
-    return reduceScrollMove(draggingState, event, gesture, effects);
+    return withDragFrameEffects(
+      reduceScrollMove(draggingState, event, gesture, effects),
+    );
   }
 
   effects.push({ type: "notifyDragStart" });
-  return reduceSheetMove(draggingState, event, gesture, effects);
+  return withDragFrameEffects(
+    reduceSheetMove(draggingState, event, gesture, effects),
+  );
 }
 
 function reducePointerMove(
@@ -378,14 +381,18 @@ function reducePointerMove(
   const effects: SheetMachineEffect[] = [];
 
   if (gesture.intent === "pendingAxis") {
-    return reducePendingAxisMove(state, event, gesture, effects);
+    return withDragFrameEffects(
+      reducePendingAxisMove(state, event, gesture, effects),
+    );
   }
 
   if (gesture.intent === "scroll") {
-    return reduceScrollMove(state, event, gesture, effects);
+    return withDragFrameEffects(
+      reduceScrollMove(state, event, gesture, effects),
+    );
   }
 
-  return reduceSheetMove(state, event, gesture, effects);
+  return withDragFrameEffects(reduceSheetMove(state, event, gesture, effects));
 }
 
 function reducePendingAxisMove(
@@ -401,14 +408,18 @@ function reducePendingAxisMove(
 
   if (totalDeltaY < 0) {
     const excessUp = -totalDeltaY - SHEET_AXIS_THRESHOLD_PX;
+    const scrollEffects =
+      excessUp > 0
+        ? [...effects, { type: "scrollBody" as const, deltaPx: excessUp }]
+        : effects;
+
     return {
       state: {
         ...state,
         visibleHeightPx: state.fullHeightPx,
         gesture: beginScrollGesture(gesture, event.clientY),
       },
-      effects,
-      bodyScrollDeltaPx: excessUp > 0 ? excessUp : undefined,
+      effects: scrollEffects,
     };
   }
 
@@ -453,8 +464,7 @@ function reduceScrollMove(
       ...state,
       gesture: { ...gesture, lastClientY: event.clientY },
     },
-    effects,
-    bodyScrollDeltaPx: -deltaY,
+    effects: [...effects, { type: "scrollBody", deltaPx: -deltaY }],
   };
 }
 
@@ -487,8 +497,7 @@ function reduceSheetMove(
           visibleHeightPx: state.fullHeightPx,
           gesture: beginScrollGesture(gesture, event.clientY),
         },
-        effects,
-        bodyScrollDeltaPx: scrollExcessPx,
+        effects: [...effects, { type: "scrollBody", deltaPx: scrollExcessPx }],
       };
     }
   }
@@ -540,9 +549,11 @@ function reducePointerUp(
     state.fullHeightPx,
   );
 
-  const effects: SheetMachineEffect[] = [{ type: "notifyDragEnd" }];
+  const effects: SheetMachineEffect[] = settlingEffects(state, heightPx, [
+    { type: "notifyDragEnd" },
+  ]);
   if (snap !== state.restingSnap) {
-    effects.push({ type: "notifySnapChange", snap });
+    effects.unshift({ type: "notifySnapChange", snap });
   }
 
   return {

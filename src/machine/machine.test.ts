@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  createInitialSheetMachineState,
-  reduceSheetMachine,
-} from "./sheet-machine";
+import { createInitialSheetMachineState, reduceSheetMachine } from "./index";
 
 const baseHeights = {
   collapsedHeightPx: 150,
@@ -227,7 +224,7 @@ describe("reduceSheetMachine", () => {
     });
 
     expect(result.state.gesture?.intent).toBe("scroll");
-    expect(result.bodyScrollDeltaPx).toBe(12);
+    expect(result.effects).toContainEqual({ type: "scrollBody", deltaPx: 12 });
   });
 
   it("reanchors sheet on downward move from pendingAxis", () => {
@@ -323,7 +320,7 @@ describe("reduceSheetMachine", () => {
 
     expect(result.state.visibleHeightPx).toBe(700);
     expect(result.state.gesture?.intent).toBe("scroll");
-    expect(result.bodyScrollDeltaPx).toBe(10);
+    expect(result.effects).toContainEqual({ type: "scrollBody", deltaPx: 10 });
   });
 
   it("does not drag below collapsed height when reserve is in the floor", () => {

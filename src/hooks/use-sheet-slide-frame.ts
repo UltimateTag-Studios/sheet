@@ -3,7 +3,7 @@ import { useCallback, useLayoutEffect, useMemo, useRef } from "react";
 
 import { sheetFrameStyle } from "../layout/sheet-transform";
 import { applySheetSlideFrame } from "../layout/sync-sheet-dom-frame";
-import type { SheetPhase } from "../machine/sheet-machine";
+import type { SheetPhase } from "../machine";
 
 export type UseSheetSlideFrameOptions = {
   visibleHeightPx: number;
@@ -53,26 +53,12 @@ export function useSheetSlideFrame({
       return;
     }
     const suppress = suppressInitialLayoutTransitionRef.current;
-    const beforeHeightPx = Math.round(slide.getBoundingClientRect().height);
-    const targetHeightPx = Math.round(visibleHeightPx);
     applySheetSlideFrame(slide, visibleHeightPx, phase, suppress);
     if (suppress) {
       suppressInitialLayoutTransitionRef.current = false;
     }
     onLayoutFrameApplied?.();
-
-    if (phase === "settling" && beforeHeightPx === targetHeightPx) {
-      // No effective height change — CSS will not emit transitionend; avoid stuck settling.
-      queueMicrotask(onSettleComplete);
-    }
-  }, [
-    enabled,
-    onLayoutFrameApplied,
-    onSettleComplete,
-    phase,
-    sheetSlideRef,
-    visibleHeightPx,
-  ]);
+  }, [enabled, onLayoutFrameApplied, phase, sheetSlideRef, visibleHeightPx]);
 
   const onTransitionEnd = useCallback(
     (event: TransitionEvent<HTMLDivElement>) => {

@@ -1,4 +1,4 @@
-import { SHEET_AXIS_THRESHOLD_PX } from "../machine/sheet-machine";
+import { SHEET_AXIS_THRESHOLD_PX } from "../machine";
 
 type OutsideTap = {
   pointerId: number;

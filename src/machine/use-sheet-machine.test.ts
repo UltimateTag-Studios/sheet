@@ -1,15 +1,22 @@
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
+import type { SheetMachineEffect } from "./machine";
 import { useSheetMachine } from "./use-sheet-machine";
 
 describe("useSheetMachine", () => {
   it("skips React sync on continuous drag pointerMove", () => {
     let renderCount = 0;
+    const effects: SheetMachineEffect[] = [];
 
     const { result } = renderHook(() => {
       renderCount += 1;
-      return useSheetMachine({ restingSnap: "half" });
+      return useSheetMachine({
+        restingSnap: "half",
+        runEffect: (effect) => {
+          effects.push(effect);
+        },
+      });
     });
 
     act(() => {
@@ -52,5 +59,8 @@ describe("useSheetMachine", () => {
 
     expect(renderCount).toBe(renderCountAfterDragStart);
     expect(result.current.state?.phase).toBe("dragging");
+    expect(effects.some((effect) => effect.type === "syncDragFrame")).toBe(
+      true,
+    );
   });
 });

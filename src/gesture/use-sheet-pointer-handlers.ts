@@ -12,7 +12,7 @@ import {
   type SheetMachineResult,
   type SheetPhase,
   type SheetPointerSurface,
-} from "../machine/sheet-machine";
+} from "../machine";
 import { activatePostDragClickRepair } from "./activate-post-drag-click-repair";
 
 export type SheetPointerHandlers = {
@@ -152,7 +152,6 @@ export function useSheetPointerHandlers(
   dispatch: (event: SheetMachineEvent) => SheetMachineResult,
   readScrollTop: () => number,
   readMachinePhase: () => SheetPhase | null,
-  applyBodyScrollDelta: (deltaPx: number) => void,
   scrollMomentum: {
     recordScrollPointerSample: (clientY: number) => void;
     releaseScrollMomentum: () => void;
@@ -164,13 +163,11 @@ export function useSheetPointerHandlers(
   const dispatchRef = useRef(dispatch);
   const readScrollTopRef = useRef(readScrollTop);
   const readMachinePhaseRef = useRef(readMachinePhase);
-  const applyBodyScrollDeltaRef = useRef(applyBodyScrollDelta);
   const scrollMomentumRef = useRef(scrollMomentum);
 
   dispatchRef.current = dispatch;
   readScrollTopRef.current = readScrollTop;
   readMachinePhaseRef.current = readMachinePhase;
-  applyBodyScrollDeltaRef.current = applyBodyScrollDelta;
   scrollMomentumRef.current = scrollMomentum;
 
   const endPointerSession = useCallback(() => {
@@ -189,10 +186,11 @@ export function useSheetPointerHandlers(
       }
 
       const intent = result.state.gesture?.intent;
-      const scrollDeltaPx = result.bodyScrollDeltaPx ?? 0;
+      const scrolled = result.effects.some(
+        (effect) => effect.type === "scrollBody" && effect.deltaPx !== 0,
+      );
 
-      if (scrollDeltaPx !== 0) {
-        applyBodyScrollDeltaRef.current(scrollDeltaPx);
+      if (scrolled) {
         session.hadEffect = true;
       } else if (!isVisibleHeightAtRestingSnap(result.state)) {
         session.hadEffect = true;
