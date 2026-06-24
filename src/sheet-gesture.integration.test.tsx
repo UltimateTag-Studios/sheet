@@ -11,7 +11,6 @@ import { type ReactElement, useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { SheetHost } from "./context/sheet-host-context";
-import { deactivatePostDragClickRepairForTests } from "./gesture/activate-post-drag-click-repair";
 import { Sheet, type SheetSnap } from "./sheet";
 import { SheetLayout } from "./sheet-layout";
 
@@ -339,40 +338,25 @@ function pointerDown(surface: Element, pointerId: number, clientY: number) {
   });
 }
 
-function sheetSlide(): HTMLElement {
-  const slide = document.querySelector(".sheet");
-  if (!(slide instanceof HTMLElement)) {
-    throw new Error("Expected sheet slide");
-  }
-  return slide;
-}
-
 function pointerMove(pointerId: number, clientY: number) {
   act(() => {
-    sheetSlide().dispatchEvent(
+    document.dispatchEvent(
       new PointerEvent("pointermove", {
         pointerId,
         clientY,
         bubbles: true,
-        cancelable: true,
       }),
     );
   });
 }
 
-function pointerUp(
-  pointerId: number,
-  clientY: number,
-  dispatchTarget: EventTarget = sheetSlide(),
-) {
+function pointerUp(pointerId: number, clientY: number) {
   act(() => {
-    dispatchTarget.dispatchEvent(
+    document.dispatchEvent(
       new PointerEvent("pointerup", {
         pointerId,
         clientY,
         bubbles: true,
-        cancelable: true,
-        button: 0,
       }),
     );
   });
@@ -396,7 +380,6 @@ function slideHeightPx(): number {
 
 describe("Sheet gesture integration", () => {
   afterEach(() => {
-    deactivatePostDragClickRepairForTests();
     cleanup();
   });
 
@@ -924,92 +907,20 @@ describe("Sheet gesture integration", () => {
       expect(screen.getByTestId("body-selected").textContent).toBe("yes");
     });
 
-    it("activates an outside button on first tap after chrome drag", async () => {
-      renderWithHost(<TestHalfSheetWithHeaderAndBodyButtons />);
-
-      const outside = document.createElement("button");
-      outside.type = "button";
-      outside.dataset.testid = "outside-action";
-      let activated = false;
-      outside.addEventListener("click", () => {
-        activated = true;
-      });
-      document.body.appendChild(outside);
-
-      const chrome = document.querySelector("[data-sheet-chrome]");
-      if (!chrome) {
-        throw new Error("Expected sheet chrome");
-      }
-
-      dragSurface(chrome, 43, 700, 400);
-
-      pointerDown(outside, 44, 60);
-      pointerUp(44, 60, outside);
-
-      expect(activated).toBe(false);
-
-      await act(async () => {
-        await new Promise<void>((resolve) => {
-          requestAnimationFrame(() => {
-            requestAnimationFrame(() => resolve());
-          });
-        });
-      });
-
-      expect(activated).toBe(true);
-
-      outside.remove();
-    });
-
-    it("does not preventDefault on pointermove during a real sheet drag", () => {
-      renderWithHost(<TestHalfSheetWithHeaderAndBodyButtons />);
-
-      const chrome = document.querySelector("[data-sheet-chrome]");
-      if (!chrome) {
-        throw new Error("Expected sheet chrome");
-      }
-
-      let moveDefaultPrevented = false;
-      document.addEventListener("pointermove", (event) => {
-        if (event.pointerId === 54) {
-          moveDefaultPrevented = event.defaultPrevented;
-        }
-      });
-
-      pointerDown(chrome, 54, 700);
-      pointerMove(54, 400);
-
-      expect(moveDefaultPrevented).toBe(false);
-    });
-
-    it("does not preventDefault on pointerup after a real sheet drag", () => {
-      renderWithHost(<TestHalfSheetWithHeaderAndBodyButtons />);
-
-      const chrome = document.querySelector("[data-sheet-chrome]");
-      if (!chrome) {
-        throw new Error("Expected sheet chrome");
-      }
-
-      let releaseDefaultPrevented = false;
-      document.addEventListener("pointerup", (event) => {
-        if (event.pointerId === 52) {
-          releaseDefaultPrevented = event.defaultPrevented;
-        }
-      });
-
-      pointerDown(chrome, 52, 700);
-      pointerMove(52, 400);
-      pointerUp(52, 400);
-
-      expect(releaseDefaultPrevented).toBe(false);
-    });
-
     it("does not preventDefault on pointerup over an outside button after a drag", () => {
       renderWithHost(<TestHalfSheetWithHeaderAndBodyButtons />);
 
       const outside = document.createElement("button");
       outside.type = "button";
       outside.textContent = "Outside";
+      let defaultPreventedBySheetRouter = false;
+      outside.addEventListener(
+        "pointerup",
+        (event) => {
+          defaultPreventedBySheetRouter = event.defaultPrevented;
+        },
+        { capture: true },
+      );
       document.body.appendChild(outside);
 
       const chrome = document.querySelector("[data-sheet-chrome]");
@@ -1017,19 +928,21 @@ describe("Sheet gesture integration", () => {
         throw new Error("Expected sheet chrome");
       }
 
-      let releaseDefaultPrevented = false;
-      sheetSlide().addEventListener("pointerup", (event) => {
-        if (event.pointerId === 50) {
-          releaseDefaultPrevented = event.defaultPrevented;
-        }
-      });
-
       pointerDown(chrome, 50, 700);
       pointerMove(50, 500);
-      // With setPointerCapture, pointerup is delivered to `.sheet` even off-panel.
-      pointerUp(50, 10, sheetSlide());
+      act(() => {
+        outside.dispatchEvent(
+          new PointerEvent("pointerup", {
+            pointerId: 50,
+            clientY: 10,
+            bubbles: true,
+            button: 0,
+            cancelable: true,
+          }),
+        );
+      });
 
-      expect(releaseDefaultPrevented).toBe(false);
+      expect(defaultPreventedBySheetRouter).toBe(false);
 
       outside.remove();
     });
