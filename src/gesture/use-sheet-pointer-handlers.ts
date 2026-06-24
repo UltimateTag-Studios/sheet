@@ -16,7 +16,7 @@ import { SHEET_AXIS_THRESHOLD_PX } from "../machine/sheet-machine";
 
 export type SheetPointerHandlers = {
   onChromePointerDown: (event: ReactPointerEvent<HTMLElement>) => void;
-  onBodyPointerDown: (event: ReactPointerEvent<HTMLElement>) => void;
+  onBodyPointerDown: (event: React.PointerEvent<HTMLElement>) => void;
 };
 
 type PointerTracking = {
@@ -24,19 +24,23 @@ type PointerTracking = {
   up: (event: PointerEvent) => void;
 };
 
+type SessionPhase = "watch" | "sheet";
+
 type PointerSession = {
   pointerId: number;
-  tapTarget: EventTarget;
+  pressTarget: EventTarget;
   sheetBoundary: HTMLElement;
+  routeElement: HTMLElement;
+  phase: SessionPhase;
   startClientY: number;
+  lastClientY: number;
   scrollTopPx: number;
   surface: SheetPointerSurface;
   committed: boolean;
   hadEffect: boolean;
+  pointerCaptured: boolean;
   tracking: PointerTracking;
 };
-
-const POINTER_UP_LISTENER_OPTS: AddEventListenerOptions = { capture: true };
 
 function pointerReleaseOnSheet(
   target: EventTarget | null,
@@ -45,37 +49,101 @@ function pointerReleaseOnSheet(
   return target instanceof Node && sheetBoundary.contains(target);
 }
 
-function detachDocumentTracking(tracking: PointerTracking): void {
-  document.removeEventListener("pointermove", tracking.move);
-  document.removeEventListener(
-    "pointerup",
-    tracking.up,
-    POINTER_UP_LISTENER_OPTS,
-  );
-  document.removeEventListener(
-    "pointercancel",
-    tracking.up,
-    POINTER_UP_LISTENER_OPTS,
+function resolveTapClickTarget(pressTarget: EventTarget): HTMLElement | null {
+  if (!(pressTarget instanceof HTMLElement)) {
+    return null;
+  }
+  return getInteractivePressElement(pressTarget) ?? pressTarget;
+}
+
+const MOVE_LISTENER: AddEventListenerOptions = { passive: true };
+
+const INTERACTIVE_PRESS_SELECTOR =
+  "button,a,[role='button'],input,select,textarea,[contenteditable]";
+
+function getInteractivePressElement(target: EventTarget): HTMLElement | null {
+  if (!(target instanceof HTMLElement)) {
+    return null;
+  }
+
+  const pressElement = target.closest(INTERACTIVE_PRESS_SELECTOR);
+  return pressElement instanceof HTMLElement ? pressElement : null;
+}
+
+function isHandlePressTarget(target: EventTarget): boolean {
+  return (
+    target instanceof HTMLElement &&
+    Boolean(target.closest("[data-sheet-handle],.sheet-handle"))
   );
 }
 
-function attachDocumentTracking(tracking: PointerTracking): void {
-  document.addEventListener("pointermove", tracking.move);
-  document.addEventListener("pointerup", tracking.up, POINTER_UP_LISTENER_OPTS);
-  document.addEventListener(
-    "pointercancel",
-    tracking.up,
-    POINTER_UP_LISTENER_OPTS,
-  );
+function shouldCapturePointerOnDown(target: EventTarget): boolean {
+  if (getInteractivePressElement(target)) {
+    return false;
+  }
+  return isHandlePressTarget(target);
+}
+
+function acquireSheetPointerCapture(
+  sheetBoundary: HTMLElement,
+  pointerId: number,
+): boolean {
+  if (typeof sheetBoundary.setPointerCapture !== "function") {
+    return false;
+  }
+  sheetBoundary.setPointerCapture(pointerId);
+  return true;
+}
+
+function releaseSheetPointerCapture(
+  sheetBoundary: HTMLElement,
+  pointerId: number,
+): void {
+  if (
+    typeof sheetBoundary.releasePointerCapture === "function" &&
+    typeof sheetBoundary.hasPointerCapture === "function" &&
+    sheetBoundary.hasPointerCapture(pointerId)
+  ) {
+    sheetBoundary.releasePointerCapture(pointerId);
+  }
+}
+
+function detachPointerTracking(session: PointerSession): void {
+  const { tracking, routeElement, pointerId, pointerCaptured, sheetBoundary } =
+    session;
+  routeElement.removeEventListener("pointermove", tracking.move, MOVE_LISTENER);
+  routeElement.removeEventListener("pointerup", tracking.up);
+  routeElement.removeEventListener("pointercancel", tracking.up);
+  if (pointerCaptured) {
+    releaseSheetPointerCapture(sheetBoundary, pointerId);
+  }
+}
+
+function attachPointerTracking(session: PointerSession): void {
+  const { tracking, routeElement } = session;
+  routeElement.addEventListener("pointermove", tracking.move, MOVE_LISTENER);
+  routeElement.addEventListener("pointerup", tracking.up);
+  routeElement.addEventListener("pointercancel", tracking.up);
+}
+
+function promoteWatchToSheet(session: PointerSession): void {
+  detachPointerTracking(session);
+  session.routeElement = session.sheetBoundary;
+  session.phase = "sheet";
+  attachPointerTracking(session);
+  if (!session.pointerCaptured) {
+    session.pointerCaptured = acquireSheetPointerCapture(
+      session.sheetBoundary,
+      session.pointerId,
+    );
+  }
 }
 
 /**
- * Tap vs drag on chrome and body:
- * 1. pointerdown (capture) — record press target, document listeners for move/up
- * 2. move past slop — commit sheet drag
- * 3. release without drag effect on the sheet — preventDefault + click() the press target
- * 4. release after real drag on the sheet — machine pointerUp; preventDefault when sheet/scroll moved
- * 5. release outside the sheet panel — end the gesture; only steal default when release is on-sheet
+ * Pointer routing on the sheet panel only — no document listeners.
+ * Interactive controls are watched on the press target until move slop.
+ * Move never calls preventDefault (Android poisons the next gesture's click).
+ * Pure in-sheet taps: preventDefault on release + activate the press target.
  */
 export function useSheetPointerHandlers(
   dispatch: (event: SheetMachineEvent) => SheetMachineResult,
@@ -105,7 +173,7 @@ export function useSheetPointerHandlers(
   const endPointerSession = useCallback(() => {
     const session = sessionRef.current;
     if (session) {
-      detachDocumentTracking(session.tracking);
+      detachPointerTracking(session);
     }
     sessionRef.current = null;
   }, []);
@@ -132,14 +200,6 @@ export function useSheetPointerHandlers(
       } else if (intent === "sheet") {
         scrollMomentumRef.current.clearScrollPointerTracking();
       }
-
-      if (
-        result.state.phase === "dragging" &&
-        (intent === "sheet" || intent === "scroll") &&
-        session.hadEffect
-      ) {
-        event.preventDefault();
-      }
     },
     [],
   );
@@ -165,6 +225,7 @@ export function useSheetPointerHandlers(
       }
 
       session.committed = true;
+      session.lastClientY = event.clientY;
 
       const moveResult = dispatchRef.current({
         type: "pointerMove",
@@ -187,10 +248,13 @@ export function useSheetPointerHandlers(
       }
 
       const {
-        hadEffect,
-        tapTarget,
         committed: wasCommitted,
+        hadEffect,
+        lastClientY,
+        pointerId,
+        pressTarget,
         sheetBoundary,
+        startClientY,
       } = session;
 
       if (wasCommitted) {
@@ -203,24 +267,39 @@ export function useSheetPointerHandlers(
 
       endPointerSession();
 
+      if (
+        wasCommitted &&
+        event.type === "pointercancel" &&
+        event.clientY === 0 &&
+        lastClientY !== startClientY
+      ) {
+        dispatchRef.current({
+          type: "pointerMove",
+          pointerId,
+          clientY: lastClientY,
+          scrollTopPx: readScrollTopRef.current(),
+        });
+      }
+
       const releaseOnSheet = pointerReleaseOnSheet(event.target, sheetBoundary);
 
       if (!releaseOnSheet) {
-        if (
-          !hadEffect &&
-          tapTarget instanceof HTMLElement &&
-          sheetBoundary.contains(tapTarget)
-        ) {
-          event.preventDefault();
-          tapTarget.click();
+        if (!hadEffect) {
+          const tapTarget = resolveTapClickTarget(pressTarget);
+          if (tapTarget && sheetBoundary.contains(tapTarget)) {
+            event.preventDefault();
+            tapTarget.click();
+          }
         }
         return;
       }
 
-      event.preventDefault();
-
-      if (!hadEffect && tapTarget instanceof HTMLElement) {
-        tapTarget.click();
+      if (!hadEffect) {
+        event.preventDefault();
+        const tapTarget = resolveTapClickTarget(pressTarget);
+        if (tapTarget) {
+          tapTarget.click();
+        }
       }
     },
     [endPointerSession],
@@ -239,9 +318,20 @@ export function useSheetPointerHandlers(
           return;
         }
 
+        if (session.phase === "watch") {
+          promoteWatchToSheet(session);
+        } else if (!session.pointerCaptured) {
+          session.pointerCaptured = acquireSheetPointerCapture(
+            session.sheetBoundary,
+            session.pointerId,
+          );
+        }
+
         commitPendingGesture(event);
         return;
       }
+
+      session.lastClientY = event.clientY;
 
       const result = dispatchRef.current({
         type: "pointerMove",
@@ -262,8 +352,7 @@ export function useSheetPointerHandlers(
           return;
         }
 
-        const phase = readMachinePhaseRef.current();
-        if (phase === "dragging") {
+        if (readMachinePhaseRef.current() === "dragging") {
           return;
         }
 
@@ -276,26 +365,42 @@ export function useSheetPointerHandlers(
         scrollMomentumRef.current.clearScrollPointerTracking();
         endPointerSession();
 
-        const move = (pointerEvent: PointerEvent) => {
-          onPointerMove(pointerEvent);
+        const tracking = {
+          move: (pointerEvent: PointerEvent) => {
+            onPointerMove(pointerEvent);
+          },
+          up: (pointerEvent: PointerEvent) => {
+            finishPointer(pointerEvent);
+          },
         };
-        const up = (pointerEvent: PointerEvent) => {
-          finishPointer(pointerEvent);
-        };
-        const tracking = { move, up };
 
-        attachDocumentTracking(tracking);
+        const interactivePressElement = getInteractivePressElement(
+          event.target,
+        );
+        const phase: SessionPhase = interactivePressElement ? "watch" : "sheet";
+        const routeElement = interactivePressElement ?? sheetBoundary;
+        const pointerCaptured =
+          phase === "sheet" && shouldCapturePointerOnDown(event.target)
+            ? acquireSheetPointerCapture(sheetBoundary, event.pointerId)
+            : false;
+
         sessionRef.current = {
           pointerId: event.pointerId,
-          tapTarget: event.target,
+          pressTarget: event.target,
           sheetBoundary,
+          routeElement,
+          phase,
           startClientY: event.clientY,
+          lastClientY: event.clientY,
           scrollTopPx: readScrollTopRef.current(),
           surface,
           committed: false,
           hadEffect: false,
+          pointerCaptured,
           tracking,
         };
+
+        attachPointerTracking(sessionRef.current);
       },
     [endPointerSession, finishPointer, onPointerMove],
   );

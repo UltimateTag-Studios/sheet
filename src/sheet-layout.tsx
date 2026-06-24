@@ -74,7 +74,7 @@ export function SheetLayout({ header, body }: SheetLayoutProps) {
         ref={registerBodyEl}
         className={sheetBodyRootClass(canBodyScroll)}
         data-sheet-scroll-root
-        onPointerDownCapture={pointerHandlers.onBodyPointerDown}
+        onPointerDown={pointerHandlers.onBodyPointerDown}
       >
         <div className="sheet-body-inner" style={bodyInnerScrollStyle}>
           {body}

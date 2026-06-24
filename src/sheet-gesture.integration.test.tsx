@@ -328,7 +328,18 @@ function stubScrollRootDimensions(
   });
 }
 
+function sheetGestureTarget(): EventTarget {
+  const sheet = document.querySelector(".sheet");
+  if (sheet) {
+    return sheet;
+  }
+  throw new Error("Expected sheet slide");
+}
+
+let lastPointerDownSurface: Element | null = null;
+
 function pointerDown(surface: Element, pointerId: number, clientY: number) {
+  lastPointerDownSurface = surface;
   act(() => {
     fireEvent.pointerDown(surface, {
       pointerId,
@@ -339,27 +350,34 @@ function pointerDown(surface: Element, pointerId: number, clientY: number) {
 }
 
 function pointerMove(pointerId: number, clientY: number) {
+  const target = lastPointerDownSurface ?? sheetGestureTarget();
   act(() => {
-    document.dispatchEvent(
+    target.dispatchEvent(
       new PointerEvent("pointermove", {
         pointerId,
         clientY,
         bubbles: true,
+        cancelable: true,
       }),
     );
   });
 }
 
 function pointerUp(pointerId: number, clientY: number) {
+  const target = lastPointerDownSurface ?? sheetGestureTarget();
   act(() => {
-    document.dispatchEvent(
+    target.dispatchEvent(
       new PointerEvent("pointerup", {
         pointerId,
         clientY,
         bubbles: true,
+        cancelable: true,
+        button: 0,
       }),
     );
   });
+
+  lastPointerDownSurface = null;
 }
 
 function dragSurface(
@@ -834,16 +852,14 @@ describe("Sheet gesture integration", () => {
       expect(sheetPhase()).toBe("idle");
     });
 
-    it("activates a row when jitter crosses slop without sheet effect", () => {
+    it("drags the sheet from a list row after move slop without firing the row action", () => {
       renderWithHost(<TestFullSheetWithButtonList />);
 
       const row = screen.getByTestId("row-1");
-      pointerDown(row, 35, 500);
-      pointerMove(35, 508);
-      pointerUp(35, 508);
 
-      expect(screen.getByTestId("last-tapped-row").textContent).toBe("1");
-      expect(sheetPhase()).toBe("idle");
+      dragSurface(row, 35, 650, 400);
+
+      expect(screen.getByTestId("last-tapped-row").textContent).toBe("none");
     });
 
     it("drags sheet from header button after move slop without firing action", () => {
@@ -907,44 +923,27 @@ describe("Sheet gesture integration", () => {
       expect(screen.getByTestId("body-selected").textContent).toBe("yes");
     });
 
-    it("does not preventDefault on pointerup over an outside button after a drag", () => {
+    it("does not preventDefault on pointerup after a real sheet drag", () => {
       renderWithHost(<TestHalfSheetWithHeaderAndBodyButtons />);
 
-      const outside = document.createElement("button");
-      outside.type = "button";
-      outside.textContent = "Outside";
-      let defaultPreventedBySheetRouter = false;
-      outside.addEventListener(
-        "pointerup",
-        (event) => {
-          defaultPreventedBySheetRouter = event.defaultPrevented;
-        },
-        { capture: true },
-      );
-      document.body.appendChild(outside);
-
       const chrome = document.querySelector("[data-sheet-chrome]");
-      if (!chrome) {
+      const sheet = document.querySelector(".sheet");
+      if (!chrome || !(sheet instanceof HTMLElement)) {
         throw new Error("Expected sheet chrome");
       }
 
-      pointerDown(chrome, 50, 700);
-      pointerMove(50, 500);
-      act(() => {
-        outside.dispatchEvent(
-          new PointerEvent("pointerup", {
-            pointerId: 50,
-            clientY: 10,
-            bubbles: true,
-            button: 0,
-            cancelable: true,
-          }),
-        );
+      let releaseDefaultPrevented = false;
+      sheet.addEventListener("pointerup", (event) => {
+        if (event.pointerId === 50) {
+          releaseDefaultPrevented = event.defaultPrevented;
+        }
       });
 
-      expect(defaultPreventedBySheetRouter).toBe(false);
+      pointerDown(chrome, 50, 700);
+      pointerMove(50, 500);
+      pointerUp(50, 10);
 
-      outside.remove();
+      expect(releaseDefaultPrevented).toBe(false);
     });
   });
 });

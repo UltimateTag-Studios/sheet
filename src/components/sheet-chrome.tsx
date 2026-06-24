@@ -20,7 +20,7 @@ export function SheetChrome({
       ref={measureRef}
       className="sheet-chrome"
       data-sheet-chrome
-      onPointerDownCapture={onChromePointerDown}
+      onPointerDown={onChromePointerDown}
     >
       <SheetHandle />
       {children}
