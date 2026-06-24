@@ -26,12 +26,11 @@ type PointerTracking = {
   up: (event: PointerEvent) => void;
 };
 
-/** DOM-only latch — capture, routing element, and tap synthesis targets. */
+/** DOM-only latch — capture, FSM route, and tap synthesis targets. */
 type DomPointerLatch = {
   pointerId: number;
   pressTarget: EventTarget;
   sheetBoundary: HTMLElement;
-  routeElement: HTMLElement;
   route: SheetPointerRoute;
   startClientY: number;
   lastClientY: number;
@@ -49,10 +48,6 @@ function resolvePressElement(target: EventTarget): HTMLElement | null {
   return null;
 }
 
-function resolveTapClickTarget(pressTarget: EventTarget): HTMLElement | null {
-  return resolvePressElement(pressTarget);
-}
-
 const MOVE_LISTENER: AddEventListenerOptions = { passive: true };
 
 function isHandlePressTarget(target: EventTarget): boolean {
@@ -66,9 +61,9 @@ function resolvePointerRoute(
   pressTarget: EventTarget,
   sheetBoundary: HTMLElement,
   surface: SheetPointerSurface,
-): { route: SheetPointerRoute; routeElement: HTMLElement } {
+): SheetPointerRoute {
   if (surface === "chrome" || isHandlePressTarget(pressTarget)) {
-    return { route: "sheet", routeElement: sheetBoundary };
+    return "sheet";
   }
 
   const pressElement = resolvePressElement(pressTarget);
@@ -77,10 +72,10 @@ function resolvePointerRoute(
     pressElement !== sheetBoundary &&
     sheetBoundary.contains(pressElement)
   ) {
-    return { route: "watch", routeElement: pressElement };
+    return "watch";
   }
 
-  return { route: "sheet", routeElement: sheetBoundary };
+  return "sheet";
 }
 
 function shouldCapturePointerOnDown(
@@ -118,28 +113,28 @@ function releaseSheetPointerCapture(
 }
 
 function detachPointerTracking(latch: DomPointerLatch): void {
-  const { tracking, routeElement, pointerId, pointerCaptured, sheetBoundary } =
-    latch;
-  routeElement.removeEventListener("pointermove", tracking.move, MOVE_LISTENER);
-  routeElement.removeEventListener("pointerup", tracking.up);
-  routeElement.removeEventListener("pointercancel", tracking.up);
+  const { tracking, sheetBoundary, pointerId, pointerCaptured } = latch;
+  sheetBoundary.removeEventListener(
+    "pointermove",
+    tracking.move,
+    MOVE_LISTENER,
+  );
+  sheetBoundary.removeEventListener("pointerup", tracking.up);
+  sheetBoundary.removeEventListener("pointercancel", tracking.up);
   if (pointerCaptured) {
     releaseSheetPointerCapture(sheetBoundary, pointerId);
   }
 }
 
 function attachPointerTracking(latch: DomPointerLatch): void {
-  const { tracking, routeElement } = latch;
-  routeElement.addEventListener("pointermove", tracking.move, MOVE_LISTENER);
-  routeElement.addEventListener("pointerup", tracking.up);
-  routeElement.addEventListener("pointercancel", tracking.up);
+  const { tracking, sheetBoundary } = latch;
+  sheetBoundary.addEventListener("pointermove", tracking.move, MOVE_LISTENER);
+  sheetBoundary.addEventListener("pointerup", tracking.up);
+  sheetBoundary.addEventListener("pointercancel", tracking.up);
 }
 
-function promoteWatchToSheet(latch: DomPointerLatch): void {
-  detachPointerTracking(latch);
-  latch.routeElement = latch.sheetBoundary;
+function commitWatchRoute(latch: DomPointerLatch): void {
   latch.route = "sheet";
-  attachPointerTracking(latch);
   if (!latch.pointerCaptured) {
     latch.pointerCaptured = acquireSheetPointerCapture(
       latch.sheetBoundary,
@@ -220,7 +215,7 @@ export function useSheetPointerHandlers(
       }
 
       if (!hadEffect) {
-        const tapTarget = resolveTapClickTarget(pressTarget);
+        const tapTarget = resolvePressElement(pressTarget);
         if (tapTarget && sheetBoundary.contains(tapTarget)) {
           scheduleTapClickIfMissing(tapTarget, event.clientX, event.clientY);
         }
@@ -243,7 +238,7 @@ export function useSheetPointerHandlers(
       }
 
       if (latch.route === "watch") {
-        promoteWatchToSheet(latch);
+        commitWatchRoute(latch);
       } else if (!latch.pointerCaptured) {
         latch.pointerCaptured = acquireSheetPointerCapture(
           latch.sheetBoundary,
@@ -291,11 +286,7 @@ export function useSheetPointerHandlers(
 
         endPointerLatch();
 
-        const { route, routeElement } = resolvePointerRoute(
-          event.target,
-          sheetBoundary,
-          surface,
-        );
+        const route = resolvePointerRoute(event.target, sheetBoundary, surface);
         const pointerCaptured =
           route === "sheet" && shouldCapturePointerOnDown(event.target, route)
             ? acquireSheetPointerCapture(sheetBoundary, event.pointerId)
@@ -314,7 +305,6 @@ export function useSheetPointerHandlers(
           pointerId: event.pointerId,
           pressTarget: event.target,
           sheetBoundary,
-          routeElement,
           route,
           startClientY: event.clientY,
           lastClientY: event.clientY,
