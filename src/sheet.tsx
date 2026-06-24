@@ -54,6 +54,8 @@ export type SheetProps = {
    * During CSS height transitions, read `.sheet` geometry for in-between heights.
    */
   onLayoutFrameChange?: (frame: SheetLayoutFrameChange) => void;
+  /** Log pointer routing to console (`[sheet-touch-probe]`). Pair with sheet-map `config.debug`. */
+  touchProbe?: boolean;
 };
 
 export function Sheet({
@@ -67,6 +69,7 @@ export function Sheet({
   onSnapHeightsChange,
   onSnapSettled,
   onLayoutFrameChange,
+  touchProbe = false,
 }: SheetProps) {
   const hostEl = useSheetHostEl();
   const resolvedHalfSnap = normalizeHalfSnapFraction(halfSnapFraction);
@@ -189,6 +192,7 @@ export function Sheet({
     readPhase,
     applyBodyScrollDelta,
     scrollMomentum,
+    touchProbe,
   );
 
   const onSnapSettledRef = useRef(onSnapSettled);

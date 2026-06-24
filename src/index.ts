@@ -51,6 +51,7 @@ export {
   readHostHeightPx,
   readVisibleSheetHeightPx,
 } from "./layout/snap-heights";
+export { SHEET_AXIS_THRESHOLD_PX } from "./machine/sheet-machine";
 export type { SheetProps, SheetSnap } from "./sheet";
 export {
   DEFAULT_HALF_SNAP_FRACTION,
