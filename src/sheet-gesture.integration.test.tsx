@@ -11,6 +11,7 @@ import { type ReactElement, useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { SheetHost } from "./context/sheet-host-context";
+import { deactivatePostDragClickRepairForTests } from "./gesture/activate-post-drag-click-repair";
 import { Sheet, type SheetSnap } from "./sheet";
 import { SheetLayout } from "./sheet-layout";
 
@@ -363,10 +364,13 @@ function pointerMove(pointerId: number, clientY: number) {
   });
 }
 
-function pointerUp(pointerId: number, clientY: number) {
-  const target = lastPointerDownSurface ?? sheetGestureTarget();
+function pointerUp(
+  pointerId: number,
+  clientY: number,
+  dispatchTarget: EventTarget = lastPointerDownSurface ?? sheetGestureTarget(),
+) {
   act(() => {
-    target.dispatchEvent(
+    dispatchTarget.dispatchEvent(
       new PointerEvent("pointerup", {
         pointerId,
         clientY,
@@ -398,6 +402,7 @@ function slideHeightPx(): number {
 
 describe("Sheet gesture integration", () => {
   afterEach(() => {
+    deactivatePostDragClickRepairForTests();
     cleanup();
   });
 
@@ -921,6 +926,43 @@ describe("Sheet gesture integration", () => {
       pointerDown(bodyButton, 42, 500);
       pointerUp(42, 500);
       expect(screen.getByTestId("body-selected").textContent).toBe("yes");
+    });
+
+    it("activates an outside button on first tap after chrome drag", async () => {
+      renderWithHost(<TestHalfSheetWithHeaderAndBodyButtons />);
+
+      const outside = document.createElement("button");
+      outside.type = "button";
+      outside.dataset.testid = "outside-action";
+      let activated = false;
+      outside.addEventListener("click", () => {
+        activated = true;
+      });
+      document.body.appendChild(outside);
+
+      const chrome = document.querySelector("[data-sheet-chrome]");
+      if (!chrome) {
+        throw new Error("Expected sheet chrome");
+      }
+
+      dragSurface(chrome, 43, 700, 400);
+
+      pointerDown(outside, 44, 60);
+      pointerUp(44, 60, outside);
+
+      expect(activated).toBe(false);
+
+      await act(async () => {
+        await new Promise<void>((resolve) => {
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => resolve());
+          });
+        });
+      });
+
+      expect(activated).toBe(true);
+
+      outside.remove();
     });
 
     it("does not preventDefault on pointerup after a real sheet drag", () => {

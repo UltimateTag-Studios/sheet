@@ -6,13 +6,14 @@ import {
 } from "react";
 
 import { isVisibleHeightAtRestingSnap } from "../layout/snap-math";
-import type {
-  SheetMachineEvent,
-  SheetMachineResult,
-  SheetPhase,
-  SheetPointerSurface,
+import {
+  SHEET_AXIS_THRESHOLD_PX,
+  type SheetMachineEvent,
+  type SheetMachineResult,
+  type SheetPhase,
+  type SheetPointerSurface,
 } from "../machine/sheet-machine";
-import { SHEET_AXIS_THRESHOLD_PX } from "../machine/sheet-machine";
+import { activatePostDragClickRepair } from "./activate-post-drag-click-repair";
 
 export type SheetPointerHandlers = {
   onChromePointerDown: (event: ReactPointerEvent<HTMLElement>) => void;
@@ -144,6 +145,8 @@ function promoteWatchToSheet(session: PointerSession): void {
  * Interactive controls are watched on the press target until move slop.
  * Move never calls preventDefault (Android poisons the next gesture's click).
  * Pure in-sheet taps: preventDefault on release + activate the press target.
+ * After a real drag, {@link activatePostDragClickRepair} heals the next outside
+ * DOM tap (sibling controls in the host — not Mapbox canvas).
  */
 export function useSheetPointerHandlers(
   dispatch: (event: SheetMachineEvent) => SheetMachineResult,
@@ -300,6 +303,11 @@ export function useSheetPointerHandlers(
         if (tapTarget) {
           tapTarget.click();
         }
+        return;
+      }
+
+      if (wasCommitted) {
+        activatePostDragClickRepair(sheetBoundary);
       }
     },
     [endPointerSession],
