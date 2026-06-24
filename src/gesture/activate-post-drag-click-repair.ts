@@ -1,4 +1,5 @@
 import { SHEET_AXIS_THRESHOLD_PX } from "../machine";
+import { scheduleTapClickIfMissing } from "./schedule-tap-click-if-missing";
 
 type OutsideTap = {
   pointerId: number;
@@ -55,44 +56,6 @@ function pointerMovedBeyondTap(
     Math.hypot(event.clientX - startX, event.clientY - startY) >
     SHEET_AXIS_THRESHOLD_PX
   );
-}
-
-function dispatchSyntheticClick(
-  target: Element,
-  clientX: number,
-  clientY: number,
-): void {
-  target.dispatchEvent(
-    new MouseEvent("click", {
-      bubbles: true,
-      cancelable: true,
-      clientX,
-      clientY,
-    }),
-  );
-}
-
-function scheduleClickIfMissing(
-  target: Element,
-  clientX: number,
-  clientY: number,
-): void {
-  let clickObserved = false;
-
-  const onClick = () => {
-    clickObserved = true;
-  };
-
-  target.addEventListener("click", onClick, { capture: true, once: true });
-
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      target.removeEventListener("click", onClick, { capture: true });
-      if (!clickObserved) {
-        dispatchSyntheticClick(target, clientX, clientY);
-      }
-    });
-  });
 }
 
 /**
@@ -179,7 +142,7 @@ export function activatePostDragClickRepair(sheetBoundary: HTMLElement): void {
     deactivate();
 
     if (shouldRepair) {
-      scheduleClickIfMissing(upTarget, event.clientX, event.clientY);
+      scheduleTapClickIfMissing(upTarget, event.clientX, event.clientY);
     }
   };
 

@@ -14,6 +14,7 @@ import {
   type SheetPointerRoute,
   type SheetPointerSurface,
 } from "../machine";
+import { scheduleTapClickIfMissing } from "./schedule-tap-click-if-missing";
 
 export type SheetPointerHandlers = {
   onChromePointerDown: (event: ReactPointerEvent<HTMLElement>) => void;
@@ -37,13 +38,6 @@ type DomPointerLatch = {
   pointerCaptured: boolean;
   tracking: PointerTracking;
 };
-
-function pointerReleaseOnSheet(
-  target: EventTarget | null,
-  sheetBoundary: HTMLElement,
-): boolean {
-  return target instanceof Node && sheetBoundary.contains(target);
-}
 
 function resolvePressElement(target: EventTarget): HTMLElement | null {
   if (target instanceof HTMLElement) {
@@ -225,24 +219,10 @@ export function useSheetPointerHandlers(
         });
       }
 
-      const releaseOnSheet = pointerReleaseOnSheet(event.target, sheetBoundary);
-
-      if (!releaseOnSheet) {
-        if (!hadEffect) {
-          const tapTarget = resolveTapClickTarget(pressTarget);
-          if (tapTarget && sheetBoundary.contains(tapTarget)) {
-            event.preventDefault();
-            tapTarget.click();
-          }
-        }
-        return;
-      }
-
       if (!hadEffect) {
-        event.preventDefault();
         const tapTarget = resolveTapClickTarget(pressTarget);
-        if (tapTarget) {
-          tapTarget.click();
+        if (tapTarget && sheetBoundary.contains(tapTarget)) {
+          scheduleTapClickIfMissing(tapTarget, event.clientX, event.clientY);
         }
       }
     },

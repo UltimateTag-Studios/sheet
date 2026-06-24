@@ -384,6 +384,22 @@ function pointerUp(
   lastPointerDownSurface = null;
 }
 
+async function flushTapClickSynthesis() {
+  await act(async () => {
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => resolve());
+      });
+    });
+  });
+}
+
+async function pointerTap(target: Element, pointerId: number, clientY: number) {
+  pointerDown(target, pointerId, clientY);
+  pointerUp(pointerId, clientY);
+  await flushTapClickSynthesis();
+}
+
 function dragSurface(
   surface: Element,
   pointerId: number,
@@ -557,12 +573,11 @@ describe("Sheet gesture integration", () => {
     vi.useRealTimers();
   });
 
-  it("activates a body button on the first tap at half snap", () => {
+  it("activates a body button on the first tap at half snap", async () => {
     renderWithHost(<TestHalfSheetWithBodyButton />);
 
     const button = screen.getByTestId("body-action");
-    pointerDown(button, 7, 400);
-    pointerUp(7, 400);
+    await pointerTap(button, 7, 400);
 
     expect(screen.getByTestId("selected").textContent).toBe("yes");
     expect(
@@ -607,7 +622,7 @@ describe("Sheet gesture integration", () => {
     ).toBe("dragging");
   });
 
-  it("does not steal first body tap at half snap before move slop", () => {
+  it("does not steal first body tap at half snap before move slop", async () => {
     renderWithHost(<TestHalfSheetWithBodyButton />);
 
     const button = screen.getByTestId("body-action");
@@ -630,6 +645,7 @@ describe("Sheet gesture integration", () => {
     ).toBe("idle");
 
     pointerUp(7, 400);
+    await flushTapClickSynthesis();
 
     expect(screen.getByTestId("selected").textContent).toBe("yes");
     expect(
@@ -756,22 +772,21 @@ describe("Sheet gesture integration", () => {
   });
 
   describe("scrollable button list", () => {
-    it("taps a row at scroll top without changing scroll or phase", () => {
+    it("taps a row at scroll top without changing scroll or phase", async () => {
       renderWithHost(<TestFullSheetWithButtonList />);
 
       const body = getScrollRoot();
       stubScrollRoot(body);
 
       const row = screen.getByTestId("row-1");
-      pointerDown(row, 20, 500);
-      pointerUp(20, 500);
+      await pointerTap(row, 20, 500);
 
       expect(screen.getByTestId("last-tapped-row").textContent).toBe("1");
       expect(body.scrollTop).toBe(0);
       expect(sheetPhase()).toBe("idle");
     });
 
-    it("taps a row after scrolling mid-list", () => {
+    it("taps a row after scrolling mid-list", async () => {
       renderWithHost(<TestFullSheetWithButtonList />);
 
       const body = getScrollRoot();
@@ -782,8 +797,7 @@ describe("Sheet gesture integration", () => {
       });
 
       const row = screen.getByTestId("row-15");
-      pointerDown(row, 21, 500);
-      pointerUp(21, 500);
+      await pointerTap(row, 21, 500);
 
       expect(screen.getByTestId("last-tapped-row").textContent).toBe("15");
       expect(screen.getByTestId("snap").textContent).toBe("full");
@@ -846,12 +860,11 @@ describe("Sheet gesture integration", () => {
   });
 
   describe("header tap vs drag", () => {
-    it("fires header action on tap at half snap without dragging", () => {
+    it("fires header action on tap at half snap without dragging", async () => {
       renderWithHost(<TestHalfSheetWithHeaderButtons />);
 
       const button = screen.getByTestId("header-action-button");
-      pointerDown(button, 30, 400);
-      pointerUp(30, 400);
+      await pointerTap(button, 30, 400);
 
       expect(screen.getByTestId("header-action").textContent).toBe("fired");
       expect(sheetPhase()).toBe("idle");
@@ -883,12 +896,11 @@ describe("Sheet gesture integration", () => {
       expect(slideHeightPx()).not.toBe(initialHeight);
     });
 
-    it("fires header dismiss on tap at full snap", () => {
+    it("fires header dismiss on tap at full snap", async () => {
       renderWithHost(<TestFullSheetWithButtonList />);
 
       const button = screen.getByTestId("header-dismiss");
-      pointerDown(button, 32, 200);
-      pointerUp(32, 200);
+      await pointerTap(button, 32, 200);
 
       expect(screen.getByTestId("header-action").textContent).toBe("dismiss");
       expect(sheetPhase()).toBe("idle");
@@ -907,7 +919,7 @@ describe("Sheet gesture integration", () => {
       expect(screen.getByTestId("snap").textContent).toBe("full");
     });
 
-    it("activates header and body buttons on first tap after chrome drag from collapsed", () => {
+    it("activates header and body buttons on first tap after chrome drag from collapsed", async () => {
       renderWithHost(<TestHalfSheetWithHeaderAndBodyButtons />);
 
       const chrome = document.querySelector("[data-sheet-chrome]");
@@ -918,13 +930,11 @@ describe("Sheet gesture integration", () => {
       dragSurface(chrome, 40, 700, 400);
 
       const headerButton = screen.getByTestId("header-action-button");
-      pointerDown(headerButton, 41, 420);
-      pointerUp(41, 420);
+      await pointerTap(headerButton, 41, 420);
       expect(screen.getByTestId("header-selected").textContent).toBe("yes");
 
       const bodyButton = screen.getByTestId("body-action-button");
-      pointerDown(bodyButton, 42, 500);
-      pointerUp(42, 500);
+      await pointerTap(bodyButton, 42, 500);
       expect(screen.getByTestId("body-selected").textContent).toBe("yes");
     });
 
