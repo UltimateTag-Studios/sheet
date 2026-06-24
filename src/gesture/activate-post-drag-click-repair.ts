@@ -101,16 +101,7 @@ function scheduleClickIfMissing(
  * the next outside-sheet tap and dispatch `click` on the tapped element when the
  * browser does not.
  */
-export type PostDragClickRepairOptions = {
-  /** When true, the repair session ignores pointerdown on this target. */
-  shouldSkipTarget?: (target: Element) => boolean;
-};
-
-export function activatePostDragClickRepair(
-  sheetBoundary: HTMLElement,
-  options: PostDragClickRepairOptions = {},
-): void {
-  const shouldSkipTarget = options.shouldSkipTarget;
+export function activatePostDragClickRepair(sheetBoundary: HTMLElement): void {
   activeRepair?.deactivate();
 
   const session: RepairSession = {
@@ -145,10 +136,6 @@ export function activatePostDragClickRepair(
       event.clientY,
     );
     if (!downTarget || sheetBoundary.contains(downTarget)) {
-      return;
-    }
-
-    if (shouldSkipTarget?.(downTarget)) {
       return;
     }
 

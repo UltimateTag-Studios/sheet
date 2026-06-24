@@ -59,11 +59,6 @@ export type SheetProps = {
    * During CSS height transitions, read `.sheet` geometry for in-between heights.
    */
   onLayoutFrameChange?: (frame: SheetLayoutFrameChange) => void;
-  /**
-   * Optional filter for post-drag outside-click repair (e.g. skip map canvas targets
-   * that use their own pointer pipeline).
-   */
-  shouldSkipPostDragOutsideClickTarget?: (target: Element) => boolean;
 };
 
 export function Sheet({
@@ -77,7 +72,6 @@ export function Sheet({
   onSnapHeightsChange,
   onSnapSettled,
   onLayoutFrameChange,
-  shouldSkipPostDragOutsideClickTarget,
 }: SheetProps) {
   const hostEl = useSheetHostEl();
   const resolvedHalfSnap = normalizeHalfSnapFraction(halfSnapFraction);
@@ -98,11 +92,6 @@ export function Sheet({
   onSnapSettledRef.current = onSnapSettled;
   const onLayoutFrameChangeRef = useRef(onLayoutFrameChange);
   onLayoutFrameChangeRef.current = onLayoutFrameChange;
-  const shouldSkipPostDragOutsideClickTargetRef = useRef(
-    shouldSkipPostDragOutsideClickTarget,
-  );
-  shouldSkipPostDragOutsideClickTargetRef.current =
-    shouldSkipPostDragOutsideClickTarget;
 
   const dispatchRef = useRef<SheetMachineDispatch | null>(null);
   const hookStateRef = useRef<RefObject<SheetMachineState | null> | null>(null);
@@ -171,9 +160,7 @@ export function Sheet({
       case "activatePostDragClickRepair": {
         const slide = sheetSlideRef.current;
         if (slide) {
-          activatePostDragClickRepair(slide, {
-            shouldSkipTarget: shouldSkipPostDragOutsideClickTargetRef.current,
-          });
+          activatePostDragClickRepair(slide);
         }
         break;
       }

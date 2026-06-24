@@ -155,24 +155,20 @@ describe("activatePostDragClickRepair", () => {
     target.remove();
   });
 
-  it("honors shouldSkipTarget for outside taps", async () => {
+  it("synthesizes click on canvas when pointerup does not produce one", async () => {
     const sheet = document.createElement("div");
     sheet.className = "sheet";
     document.body.appendChild(sheet);
 
-    const skipped = document.createElement("div");
-    skipped.dataset.role = "skip-me";
-    document.body.appendChild(skipped);
+    const canvas = document.createElement("canvas");
+    document.body.appendChild(canvas);
 
     const onClick = vi.fn();
-    skipped.addEventListener("click", onClick);
+    canvas.addEventListener("click", onClick);
 
-    activatePostDragClickRepair(sheet, {
-      shouldSkipTarget: (target) =>
-        target instanceof HTMLElement && target.dataset.role === "skip-me",
-    });
+    activatePostDragClickRepair(sheet);
 
-    skipped.dispatchEvent(
+    canvas.dispatchEvent(
       new PointerEvent("pointerdown", {
         pointerId: 5,
         clientX: 10,
@@ -181,7 +177,7 @@ describe("activatePostDragClickRepair", () => {
         button: 0,
       }),
     );
-    skipped.dispatchEvent(
+    canvas.dispatchEvent(
       new PointerEvent("pointerup", {
         pointerId: 5,
         clientX: 10,
@@ -197,10 +193,10 @@ describe("activatePostDragClickRepair", () => {
       });
     });
 
-    expect(onClick).not.toHaveBeenCalled();
+    expect(onClick).toHaveBeenCalledTimes(1);
 
     sheet.remove();
-    skipped.remove();
+    canvas.remove();
   });
 
   it("ignores taps that start on the sheet", async () => {

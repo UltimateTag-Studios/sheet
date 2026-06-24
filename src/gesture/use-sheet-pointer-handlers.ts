@@ -45,26 +45,21 @@ function pointerReleaseOnSheet(
   return target instanceof Node && sheetBoundary.contains(target);
 }
 
-function resolveTapClickTarget(pressTarget: EventTarget): HTMLElement | null {
-  if (!(pressTarget instanceof HTMLElement)) {
-    return null;
+function resolvePressElement(target: EventTarget): HTMLElement | null {
+  if (target instanceof HTMLElement) {
+    return target;
   }
-  return getInteractivePressElement(pressTarget) ?? pressTarget;
+  if (target instanceof Text && target.parentElement) {
+    return target.parentElement;
+  }
+  return null;
+}
+
+function resolveTapClickTarget(pressTarget: EventTarget): HTMLElement | null {
+  return resolvePressElement(pressTarget);
 }
 
 const MOVE_LISTENER: AddEventListenerOptions = { passive: true };
-
-const INTERACTIVE_PRESS_SELECTOR =
-  "button,a,[role='button'],input,select,textarea,[contenteditable]";
-
-function getInteractivePressElement(target: EventTarget): HTMLElement | null {
-  if (!(target instanceof HTMLElement)) {
-    return null;
-  }
-
-  const pressElement = target.closest(INTERACTIVE_PRESS_SELECTOR);
-  return pressElement instanceof HTMLElement ? pressElement : null;
-}
 
 function isHandlePressTarget(target: EventTarget): boolean {
   return (
@@ -73,8 +68,32 @@ function isHandlePressTarget(target: EventTarget): boolean {
   );
 }
 
-function shouldCapturePointerOnDown(target: EventTarget): boolean {
-  if (getInteractivePressElement(target)) {
+function resolvePointerRoute(
+  pressTarget: EventTarget,
+  sheetBoundary: HTMLElement,
+  surface: SheetPointerSurface,
+): { route: SheetPointerRoute; routeElement: HTMLElement } {
+  if (surface === "chrome" || isHandlePressTarget(pressTarget)) {
+    return { route: "sheet", routeElement: sheetBoundary };
+  }
+
+  const pressElement = resolvePressElement(pressTarget);
+  if (
+    pressElement &&
+    pressElement !== sheetBoundary &&
+    sheetBoundary.contains(pressElement)
+  ) {
+    return { route: "watch", routeElement: pressElement };
+  }
+
+  return { route: "sheet", routeElement: sheetBoundary };
+}
+
+function shouldCapturePointerOnDown(
+  target: EventTarget,
+  route: SheetPointerRoute,
+): boolean {
+  if (route === "watch") {
     return false;
   }
   return isHandlePressTarget(target);
@@ -292,15 +311,13 @@ export function useSheetPointerHandlers(
 
         endPointerLatch();
 
-        const interactivePressElement = getInteractivePressElement(
+        const { route, routeElement } = resolvePointerRoute(
           event.target,
+          sheetBoundary,
+          surface,
         );
-        const route: SheetPointerRoute = interactivePressElement
-          ? "watch"
-          : "sheet";
-        const routeElement = interactivePressElement ?? sheetBoundary;
         const pointerCaptured =
-          route === "sheet" && shouldCapturePointerOnDown(event.target)
+          route === "sheet" && shouldCapturePointerOnDown(event.target, route)
             ? acquireSheetPointerCapture(sheetBoundary, event.pointerId)
             : false;
 
