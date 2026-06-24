@@ -144,6 +144,16 @@ export function Sheet({
         break;
       }
       case "completeSettleImmediate": {
+        const slide = sheetSlideRef.current;
+        const machineState = hookStateRef.current?.current ?? null;
+        if (slide && machineState) {
+          applySheetSlideFrame(
+            slide,
+            machineState.visibleHeightPx,
+            "idle",
+            true,
+          );
+        }
         const result = dispatchRef.current?.({ type: "settleComplete" });
         if (result) {
           emitLayoutFrameChangeRef.current(result.state);

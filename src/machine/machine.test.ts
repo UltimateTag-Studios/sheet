@@ -189,7 +189,7 @@ describe("reduceSheetMachine", () => {
     expect(result.state.visibleHeightPx).toBeLessThan(700);
   });
 
-  it("ignores pointer arm while settling", () => {
+  it("interrupts settling when a new pointer arms", () => {
     const initial = createInitialSheetMachineState({
       restingSnap: "half",
       ...baseHeights,
@@ -203,10 +203,17 @@ describe("reduceSheetMachine", () => {
     const result = armPointer(settling, {
       clientY: 400,
       surface: "body",
+      route: "watch",
     });
 
-    expect(result.state).toBe(settling);
-    expect(result.effects).toEqual([]);
+    expect(result.state.phase).toBe("idle");
+    expect(result.state.pointerArm?.pointerId).toBe(1);
+    expect(result.effects).toEqual(
+      expect.arrayContaining([
+        { type: "completeSettleImmediate" },
+        { type: "cancelScrollMomentum" },
+      ]),
+    );
   });
 
   it("enters pendingAxis at full height with scroll top", () => {

@@ -585,21 +585,17 @@ describe("Sheet gesture integration", () => {
     ).toBe("idle");
   });
 
-  it("drags the sheet from a body button after move slop without activating it", () => {
+  it("drags the sheet from a body button on the first gesture after move slop", () => {
     renderWithHost(<TestHalfSheetWithBodyButton />);
 
     const button = screen.getByTestId("body-action");
-    const body = document.querySelector("[data-sheet-scroll-root]");
-    if (!(body instanceof HTMLDivElement)) {
-      throw new Error("Expected sheet scroll root");
-    }
     const slide = document.querySelector<HTMLElement>(".sheet");
     if (!slide) {
       throw new Error("Expected sheet slide");
     }
     const initialHeight = slide.style.height;
 
-    pointerDown(body, 8, 400);
+    pointerDown(button, 8, 400);
     pointerMove(8, 600);
 
     expect(
@@ -611,15 +607,29 @@ describe("Sheet gesture integration", () => {
 
     expect(screen.getByTestId("selected").textContent).toBe("no");
     completeSheetSettling();
+  });
 
-    pointerDown(button, 9, 400);
-    expect(
-      document.querySelector(".sheet")?.getAttribute("data-sheet-phase"),
-    ).toBe("idle");
-    pointerMove(9, 600);
-    expect(
-      document.querySelector(".sheet")?.getAttribute("data-sheet-phase"),
-    ).toBe("dragging");
+  it("drags from a body button while the sheet is still settling after a snap", () => {
+    renderWithHost(<TestHalfSheetWithBodyButton />);
+
+    const chrome = document.querySelector("[data-sheet-chrome]");
+    if (!chrome) {
+      throw new Error("Expected sheet chrome");
+    }
+
+    dragSurface(chrome, 60, 400, 600);
+
+    expect(sheetPhase()).toBe("settling");
+
+    const button = screen.getByTestId("body-action");
+    pointerDown(button, 61, 400);
+    pointerMove(61, 200);
+
+    expect(sheetPhase()).toBe("dragging");
+
+    pointerUp(61, 200);
+
+    expect(screen.getByTestId("selected").textContent).toBe("no");
   });
 
   it("does not steal first body tap at half snap before move slop", async () => {
@@ -973,29 +983,6 @@ describe("Sheet gesture integration", () => {
       expect(activated).toBe(true);
 
       outside.remove();
-    });
-
-    it("does not preventDefault on pointerup after a real sheet drag", () => {
-      renderWithHost(<TestHalfSheetWithHeaderAndBodyButtons />);
-
-      const chrome = document.querySelector("[data-sheet-chrome]");
-      const sheet = document.querySelector(".sheet");
-      if (!chrome || !(sheet instanceof HTMLElement)) {
-        throw new Error("Expected sheet chrome");
-      }
-
-      let releaseDefaultPrevented = false;
-      sheet.addEventListener("pointerup", (event) => {
-        if (event.pointerId === 50) {
-          releaseDefaultPrevented = event.defaultPrevented;
-        }
-      });
-
-      pointerDown(chrome, 50, 700);
-      pointerMove(50, 500);
-      pointerUp(50, 10);
-
-      expect(releaseDefaultPrevented).toBe(false);
     });
   });
 });

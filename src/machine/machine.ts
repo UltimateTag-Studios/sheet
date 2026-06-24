@@ -402,8 +402,31 @@ function reducePointerArm(
   state: SheetMachineState,
   event: SheetMachinePointerArm,
 ): SheetMachineResult {
-  if (state.phase === "dragging" || state.phase === "settling") {
+  if (state.phase === "dragging") {
     return { state, effects: [] };
+  }
+
+  const effects: SheetMachineEffect[] = [{ type: "cancelScrollMomentum" }];
+  let baseState = state;
+
+  if (state.phase === "settling") {
+    const heightPx = clampHeight(
+      state,
+      heightForSnap(
+        state.restingSnap,
+        state.collapsedHeightPx,
+        state.halfHeightPx,
+        state.fullHeightPx,
+      ),
+    );
+    baseState = {
+      ...clearScrollSamples(state),
+      phase: "idle",
+      visibleHeightPx: heightPx,
+      gesture: null,
+      pointerArm: null,
+    };
+    effects.unshift({ type: "completeSettleImmediate" });
   }
 
   const arm = createPointerArm({
@@ -415,16 +438,16 @@ function reducePointerArm(
   });
 
   const gesture =
-    event.route === "sheet" ? createGestureForArm(state, arm) : null;
+    event.route === "sheet" ? createGestureForArm(baseState, arm) : null;
 
   return {
     state: {
-      ...clearScrollSamples(state),
+      ...clearScrollSamples(baseState),
       phase: "idle",
       gesture,
       pointerArm: arm,
     },
-    effects: [{ type: "cancelScrollMomentum" }],
+    effects,
   };
 }
 

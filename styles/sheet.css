@@ -72,7 +72,7 @@
 .sheet-header *,
 .sheet-body-inner,
 .sheet-body-inner * {
-  touch-action: manipulation;
+  touch-action: inherit;
 }
 
 .sheet-header {
