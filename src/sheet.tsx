@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { SheetContextProvider } from "./context/sheet-context";
 import { useSheetHostEl } from "./context/sheet-host-context";
-import { activatePostDragClickRepair } from "./gesture/activate-post-drag-click-repair";
+import { sheetDebugLog } from "./debug/sheet-debug";
 import { useSheetPointerHandlers } from "./gesture/use-sheet-pointer-handlers";
 import { useSheetBodyScroll } from "./hooks/use-sheet-body-scroll";
 import { useSheetMeasure } from "./hooks/use-sheet-measure";
@@ -13,14 +13,12 @@ import {
   DEFAULT_HALF_SNAP_FRACTION,
   normalizeHalfSnapFraction,
 } from "./layout/normalize-half-snap-fraction";
-import { canBodyScroll } from "./layout/scroll-mode";
 import type { SheetLayoutFrameChange } from "./layout/sheet-layout-frame-change";
 import { toSheetLayoutFrameChange } from "./layout/sheet-layout-frame-change";
 import type { SheetLayoutConfig } from "./layout/sheet-layout-vars";
 import { buildSheetLayoutVars } from "./layout/sheet-layout-vars";
 import { readVisibleSheetHeightPx } from "./layout/snap-heights";
 import type { SheetSnap } from "./layout/snap-math";
-import { applySheetSlideFrame } from "./layout/sync-sheet-dom-frame";
 import type { SheetSnapHeights } from "./layout/use-snap-heights";
 import type {
   SheetMachineDispatch,
@@ -28,6 +26,7 @@ import type {
   SheetMachineState,
 } from "./machine";
 import { useSheetMachine } from "./machine";
+import { runSheetMachineEffect } from "./sheet/run-sheet-effect";
 
 export type { SheetLayoutFrameChange };
 
@@ -59,6 +58,8 @@ export type SheetProps = {
    * During CSS height transitions, read `.sheet` geometry for in-between heights.
    */
   onLayoutFrameChange?: (frame: SheetLayoutFrameChange) => void;
+  /** Log settle and controlled-snap events to console ([sheet] prefix). */
+  debug?: boolean;
 };
 
 export function Sheet({
@@ -72,6 +73,7 @@ export function Sheet({
   onSnapHeightsChange,
   onSnapSettled,
   onLayoutFrameChange,
+  debug = false,
 }: SheetProps) {
   const hostEl = useSheetHostEl();
   const resolvedHalfSnap = normalizeHalfSnapFraction(halfSnapFraction);
@@ -90,8 +92,12 @@ export function Sheet({
   onDragInteractionChangeRef.current = onDragInteractionChange;
   const onSnapSettledRef = useRef(onSnapSettled);
   onSnapSettledRef.current = onSnapSettled;
+  const onSnapHeightsChangeRef = useRef(onSnapHeightsChange);
+  onSnapHeightsChangeRef.current = onSnapHeightsChange;
   const onLayoutFrameChangeRef = useRef(onLayoutFrameChange);
   onLayoutFrameChangeRef.current = onLayoutFrameChange;
+  const debugRef = useRef(debug);
+  debugRef.current = debug;
 
   const dispatchRef = useRef<SheetMachineDispatch | null>(null);
   const hookStateRef = useRef<RefObject<SheetMachineState | null> | null>(null);
@@ -111,96 +117,34 @@ export function Sheet({
     () => {},
   );
   const cancelScrollMomentumRef = useRef<() => void>(() => {});
+  const resetBodyScrollRef = useRef<() => void>(() => {});
 
   const runEffect = useCallback((effect: SheetMachineEffect) => {
-    switch (effect.type) {
-      case "notifySnapChange":
-        onSnapChangeRef.current?.(effect.snap);
-        break;
-      case "notifyDragStart":
-        onDragInteractionChangeRef.current?.(true);
-        break;
-      case "notifyDragEnd":
-        onDragInteractionChangeRef.current?.(false);
-        break;
-      case "scrollBody":
-        applyBodyScrollDeltaRef.current(effect.deltaPx);
-        break;
-      case "syncDragFrame": {
-        const slide = sheetSlideRef.current;
-        if (slide) {
-          applySheetSlideFrame(slide, effect.heightPx, "dragging", false);
-        }
-        canBodyScrollRef.current = effect.bodyScrollEnabled;
-        setCanBodyScrollEnabledRef.current((current) =>
-          current === effect.bodyScrollEnabled
-            ? current
-            : effect.bodyScrollEnabled,
-        );
-        const machineState = hookStateRef.current?.current ?? null;
-        if (machineState) {
-          emitLayoutFrameChangeRef.current(machineState);
-        }
-        break;
-      }
-      case "syncSettleFrame": {
-        const slide = sheetSlideRef.current;
-        if (slide) {
-          applySheetSlideFrame(slide, effect.heightPx, "settling", false);
-        }
-        const machineState = hookStateRef.current?.current ?? null;
-        if (machineState) {
-          emitLayoutFrameChangeRef.current(machineState);
-        }
-        break;
-      }
-      case "completeSettleImmediate": {
-        const slide = sheetSlideRef.current;
-        const machineState = hookStateRef.current?.current ?? null;
-        if (slide && machineState) {
-          applySheetSlideFrame(
-            slide,
-            machineState.visibleHeightPx,
-            "idle",
-            true,
-          );
-        }
-        const result = dispatchRef.current?.({ type: "settleComplete" });
-        if (result) {
-          emitLayoutFrameChangeRef.current(result.state);
-          onSnapSettledRef.current?.(result.state.restingSnap);
-        }
-        break;
-      }
-      case "cancelScrollMomentum":
-        cancelScrollMomentumRef.current();
-        break;
-      case "startScrollMomentum":
-        startScrollMomentumRef.current(effect.velocityPxPerMs);
-        break;
-      case "activatePostDragClickRepair": {
-        const slide = sheetSlideRef.current;
-        if (slide) {
-          activatePostDragClickRepair(slide);
-        }
-        break;
-      }
-    }
+    runSheetMachineEffect(effect, {
+      sheetSlideRef,
+      machineStateRef: hookStateRef,
+      debugRef,
+      onSnapChangeRef,
+      onDragInteractionChangeRef,
+      onSnapSettledRef,
+      onSnapHeightsChangeRef,
+      emitLayoutFrameChangeRef,
+      applyBodyScrollDeltaRef,
+      startScrollMomentumRef,
+      cancelScrollMomentumRef,
+      resetBodyScrollRef,
+      canBodyScrollRef,
+      setCanBodyScrollEnabledRef,
+    });
   }, []);
 
   const onLayoutMeasureRef = useRef<
     ((heights: SheetSnapHeights) => void) | undefined
   >(undefined);
 
-  const {
-    collapsedHeightPx,
-    fullHeightPx,
-    registerChromeMeasure,
-    syncReserveHeightPx,
-  } = useSheetMeasure({
+  const { registerChromeMeasure, syncReserveHeightPx } = useSheetMeasure({
     hostEl,
     halfSnapFraction: resolvedHalfSnap,
-    onSnapHeightsChange,
     onLayoutMeasureRef,
   });
 
@@ -208,10 +152,17 @@ export function Sheet({
     restingSnap,
     controlledSnap: snap,
     runEffect,
+    debug,
   });
 
   dispatchRef.current = dispatch;
   hookStateRef.current = stateRef;
+
+  useEffect(() => {
+    if (debug) {
+      sheetDebugLog(true, "debug enabled");
+    }
+  }, [debug]);
 
   onLayoutMeasureRef.current = (heights) => {
     dispatch({
@@ -228,11 +179,16 @@ export function Sheet({
     registerBodyEl,
     startScrollMomentum,
     cancelScrollMomentum,
-  } = useSheetBodyScroll(state?.restingSnap ?? restingSnap);
+    resetBodyScroll,
+  } = useSheetBodyScroll();
 
   applyBodyScrollDeltaRef.current = applyBodyScrollDelta;
   startScrollMomentumRef.current = startScrollMomentum;
   cancelScrollMomentumRef.current = cancelScrollMomentum;
+  resetBodyScrollRef.current = resetBodyScroll;
+
+  const collapsedHeightPx = state?.collapsedHeightPx ?? 0;
+  const fullHeightPx = state?.fullHeightPx ?? 0;
 
   const registerBodyRoot = useCallback(
     (node: HTMLDivElement | null) => {
@@ -242,52 +198,34 @@ export function Sheet({
     [registerBodyEl],
   );
 
+  const readPointerArm = useCallback(
+    () => stateRef.current?.pointerArm ?? null,
+    [stateRef],
+  );
+
+  const readVisibleHeightPx = useCallback(
+    () => stateRef.current?.visibleHeightPx ?? 0,
+    [stateRef],
+  );
+
   const pointerHandlers = useSheetPointerHandlers(
     dispatch,
     readScrollTop,
     readPhase,
+    readPointerArm,
   );
-
-  const stateRefForSettle = useRef(state);
-  stateRefForSettle.current = state;
-
-  const notifyRestLayoutFrame = useCallback(() => {
-    const machineState = stateRefForSettle.current;
-    if (!machineState || machineState.phase === "dragging") {
-      return;
-    }
-    emitLayoutFrameChange(machineState);
-  }, [emitLayoutFrameChange]);
 
   const { frameStyle, onTransitionEnd } = useSheetSlideFrame({
     visibleHeightPx: state?.visibleHeightPx ?? 0,
     phase: state?.phase ?? "idle",
-    sheetSlideRef,
     enabled: isReady,
     onSettleComplete: () => {
-      const result = dispatch({ type: "settleComplete" });
-      emitLayoutFrameChange(result.state);
-      onSnapSettledRef.current?.(result.state.restingSnap);
+      dispatch({ type: "settleComplete" });
     },
-    onLayoutFrameApplied: notifyRestLayoutFrame,
   });
 
   const [canBodyScrollEnabled, setCanBodyScrollEnabled] = useState(false);
   setCanBodyScrollEnabledRef.current = setCanBodyScrollEnabled;
-
-  useEffect(() => {
-    if (!state) {
-      return;
-    }
-    const next = canBodyScroll({
-      sheetSnap: state.restingSnap,
-      visibleHeightPx: state.visibleHeightPx,
-      fullHeightPx: state.fullHeightPx,
-      isDragging: state.phase === "dragging",
-    });
-    canBodyScrollRef.current = next;
-    setCanBodyScrollEnabled((current) => (current === next ? current : next));
-  }, [state]);
 
   const sheetSlideStyle = useMemo(() => buildSheetLayoutVars(layout), [layout]);
 
@@ -326,8 +264,9 @@ export function Sheet({
       collapsedHeightPx,
       fullHeightPx,
       isDragging: state?.phase === "dragging",
+      readVisibleHeightPx,
     }),
-    [collapsedHeightPx, fullHeightPx, restingSnap, state],
+    [collapsedHeightPx, fullHeightPx, readVisibleHeightPx, restingSnap, state],
   );
 
   if (!hostEl) {

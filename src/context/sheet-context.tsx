@@ -19,10 +19,17 @@ export type SheetControlsContextValue = {
 /** Live snap / height metrics — changes during gestures. */
 export type SheetMetricsContextValue = {
   sheetSnap: SheetSnap;
+  /**
+   * Last React-synced visible height. During continuous drag moves this can lag
+   * one frame behind the machine — use `readVisibleHeightPx()` or
+   * `onLayoutFrameChange` for live geometry.
+   */
   visibleHeightPx: number;
   collapsedHeightPx: number;
   fullHeightPx: number;
   isDragging: boolean;
+  /** Authoritative visible height from machine state (live during drag). */
+  readVisibleHeightPx: () => number;
 };
 
 export type SheetContextValue = SheetControlsContextValue &

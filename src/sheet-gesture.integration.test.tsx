@@ -1,420 +1,42 @@
 /** @vitest-environment jsdom */
 
-import {
-  act,
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-} from "@testing-library/react";
-import { type ReactElement, useState } from "react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { SheetHost } from "./context/sheet-host-context";
 import { deactivatePostDragClickRepairForTests } from "./gesture/activate-post-drag-click-repair";
-import { Sheet, type SheetSnap } from "./sheet";
+import { Sheet } from "./sheet";
 import { SheetLayout } from "./sheet-layout";
-
-const DEFAULT_HOST_HEIGHT = 800;
-const BUTTON_LIST_ROW_COUNT = 24;
-
-function stubScrollRoot(scrollRoot: HTMLDivElement) {
-  stubScrollRootDimensions(scrollRoot, 400, 2400);
-}
-
-function getScrollRoot(): HTMLDivElement {
-  const body = document.querySelector("[data-sheet-scroll-root]");
-  if (!(body instanceof HTMLDivElement)) {
-    throw new Error("Expected sheet scroll root");
-  }
-  return body;
-}
-
-function sheetPhase(): string | null {
-  return (
-    document.querySelector(".sheet")?.getAttribute("data-sheet-phase") ?? null
-  );
-}
-
-function completeSheetSettling() {
-  const slide = document.querySelector<HTMLElement>(".sheet");
-  if (!slide) {
-    throw new Error("Expected sheet slide");
-  }
-
-  act(() => {
-    slide.dispatchEvent(
-      new TransitionEvent("transitionend", {
-        bubbles: true,
-        propertyName: "height",
-      }),
-    );
-  });
-}
-
-function stubHostHeight(host: Element, heightPx: number) {
-  Object.defineProperty(host, "clientHeight", {
-    configurable: true,
-    value: heightPx,
-  });
-  act(() => {
-    window.dispatchEvent(new Event("resize"));
-  });
-}
-
-function renderWithHost(ui: ReactElement, hostHeight = DEFAULT_HOST_HEIGHT) {
-  render(
-    <SheetHost
-      className="sheet-host"
-      style={{ height: `${hostHeight}px`, width: "100%" }}
-    >
-      {ui}
-    </SheetHost>,
-  );
-  const host = document.querySelector(".sheet-host");
-  if (host) {
-    stubHostHeight(host, hostHeight);
-  }
-}
-
-function TestSheet() {
-  const [snap, setSnap] = useState<SheetSnap>("half");
-
-  return (
-    <>
-      <div data-testid="snap">{snap}</div>
-      <Sheet snap={snap} onSnapChange={setSnap}>
-        <SheetLayout
-          header={<div data-testid="sheet-header">Header title</div>}
-          body={<div>Body</div>}
-        />
-      </Sheet>
-    </>
-  );
-}
-
-function TestFullSheetWithScroll() {
-  const [snap, setSnap] = useState<SheetSnap>("full");
-
-  return (
-    <>
-      <div data-testid="snap">{snap}</div>
-      <Sheet snap={snap} onSnapChange={setSnap}>
-        <SheetLayout
-          header={<div data-testid="sheet-header">Header title</div>}
-          body={
-            <div data-testid="tall-body" style={{ height: "2000px" }}>
-              Body
-            </div>
-          }
-        />
-      </Sheet>
-    </>
-  );
-}
-
-function TestHalfSheetWithScroll() {
-  const [snap, setSnap] = useState<SheetSnap>("half");
-
-  return (
-    <>
-      <div data-testid="snap">{snap}</div>
-      <Sheet snap={snap} onSnapChange={setSnap}>
-        <SheetLayout
-          header={<div data-testid="sheet-header">Header title</div>}
-          body={
-            <div data-testid="tall-body" style={{ height: "2000px" }}>
-              Body
-            </div>
-          }
-        />
-      </Sheet>
-    </>
-  );
-}
-
-function TestFullSheetWithButtonList() {
-  const [snap, setSnap] = useState<SheetSnap>("full");
-  const [lastTappedRow, setLastTappedRow] = useState<number | null>(null);
-  const [headerAction, setHeaderAction] = useState<string | null>(null);
-
-  return (
-    <>
-      <div data-testid="snap">{snap}</div>
-      <div data-testid="last-tapped-row">
-        {lastTappedRow === null ? "none" : String(lastTappedRow)}
-      </div>
-      <div data-testid="header-action">{headerAction ?? "none"}</div>
-      <Sheet snap={snap} onSnapChange={setSnap}>
-        <SheetLayout
-          header={
-            <div className="sheet-header-actions">
-              <button
-                type="button"
-                data-testid="header-dismiss"
-                onClick={() => setHeaderAction("dismiss")}
-              >
-                Dismiss
-              </button>
-              <button
-                type="button"
-                data-testid="header-secondary"
-                onClick={() => setHeaderAction("secondary")}
-              >
-                Secondary
-              </button>
-            </div>
-          }
-          body={
-            <div data-testid="button-list">
-              {Array.from({ length: BUTTON_LIST_ROW_COUNT }, (_, index) => {
-                const row = index + 1;
-                return (
-                  <button
-                    key={`row-${row}`}
-                    type="button"
-                    data-testid={`row-${row}`}
-                    onClick={() => setLastTappedRow(row)}
-                  >
-                    Row {row}
-                  </button>
-                );
-              })}
-            </div>
-          }
-        />
-      </Sheet>
-    </>
-  );
-}
-
-function TestHalfSheetWithHeaderAndBodyButtons() {
-  const [snap, setSnap] = useState<SheetSnap>("collapsed");
-  const [headerAction, setHeaderAction] = useState(false);
-  const [bodyAction, setBodyAction] = useState(false);
-
-  return (
-    <>
-      <div data-testid="snap">{snap}</div>
-      <div data-testid="header-selected">{headerAction ? "yes" : "no"}</div>
-      <div data-testid="body-selected">{bodyAction ? "yes" : "no"}</div>
-      <Sheet snap={snap} onSnapChange={setSnap}>
-        <SheetLayout
-          header={
-            <button
-              type="button"
-              data-testid="header-action-button"
-              onClick={() => setHeaderAction(true)}
-            >
-              Header action
-            </button>
-          }
-          body={
-            <button
-              type="button"
-              data-testid="body-action-button"
-              onClick={() => setBodyAction(true)}
-            >
-              Body action
-            </button>
-          }
-        />
-      </Sheet>
-    </>
-  );
-}
-
-function TestHalfSheetWithHeaderButtons() {
-  const [snap, setSnap] = useState<SheetSnap>("half");
-  const [headerAction, setHeaderAction] = useState<string | null>(null);
-
-  return (
-    <>
-      <div data-testid="snap">{snap}</div>
-      <div data-testid="header-action">{headerAction ?? "none"}</div>
-      <Sheet snap={snap} onSnapChange={setSnap}>
-        <SheetLayout
-          header={
-            <button
-              type="button"
-              data-testid="header-action-button"
-              onClick={() => setHeaderAction("fired")}
-            >
-              Header action
-            </button>
-          }
-          body={<div>Body</div>}
-        />
-      </Sheet>
-    </>
-  );
-}
-
-function TestHalfSheetWithBodyButton() {
-  const [snap, setSnap] = useState<SheetSnap>("half");
-  const [selected, setSelected] = useState(false);
-
-  return (
-    <>
-      <div data-testid="selected">{selected ? "yes" : "no"}</div>
-      <Sheet snap={snap} onSnapChange={setSnap}>
-        <SheetLayout
-          header={<div data-testid="sheet-header">Header title</div>}
-          body={
-            <button
-              type="button"
-              data-testid="body-action"
-              onClick={() => setSelected(true)}
-            >
-              Select
-            </button>
-          }
-        />
-      </Sheet>
-    </>
-  );
-}
-
-function TestCollapsedSheet() {
-  const [snap, setSnap] = useState<SheetSnap>("collapsed");
-
-  return (
-    <>
-      <div data-testid="snap">{snap}</div>
-      <Sheet snap={snap} onSnapChange={setSnap}>
-        <SheetLayout
-          header={<div data-testid="sheet-header">Header title</div>}
-          body={<div>Body</div>}
-        />
-      </Sheet>
-    </>
-  );
-}
-
-function TestFullSheetWithBottomReserve() {
-  const [snap, setSnap] = useState<SheetSnap>("full");
-
-  return (
-    <Sheet
-      snap={snap}
-      onSnapChange={setSnap}
-      layout={{
-        bottomChromeReserve: { reserve: "80px", gap: "16px" },
-      }}
-    >
-      <SheetLayout
-        header={<div data-testid="sheet-header">Header title</div>}
-        body={
-          <div data-testid="tall-body" style={{ height: "2000px" }}>
-            Body
-          </div>
-        }
-      />
-    </Sheet>
-  );
-}
-
-function stubScrollRootDimensions(
-  scrollRoot: HTMLDivElement,
-  clientHeight: number,
-  scrollHeight: number,
-) {
-  Object.defineProperty(scrollRoot, "clientHeight", {
-    configurable: true,
-    value: clientHeight,
-  });
-  Object.defineProperty(scrollRoot, "scrollHeight", {
-    configurable: true,
-    value: scrollHeight,
-  });
-}
-
-function sheetGestureTarget(): EventTarget {
-  const sheet = document.querySelector(".sheet");
-  if (sheet) {
-    return sheet;
-  }
-  throw new Error("Expected sheet slide");
-}
-
-let lastPointerDownSurface: Element | null = null;
-
-function pointerDown(surface: Element, pointerId: number, clientY: number) {
-  lastPointerDownSurface = surface;
-  act(() => {
-    fireEvent.pointerDown(surface, {
-      pointerId,
-      clientY,
-      button: 0,
-    });
-  });
-}
-
-function pointerMove(pointerId: number, clientY: number) {
-  const target = lastPointerDownSurface ?? sheetGestureTarget();
-  act(() => {
-    target.dispatchEvent(
-      new PointerEvent("pointermove", {
-        pointerId,
-        clientY,
-        bubbles: true,
-        cancelable: true,
-      }),
-    );
-  });
-}
-
-function pointerUp(
-  pointerId: number,
-  clientY: number,
-  dispatchTarget: EventTarget = lastPointerDownSurface ?? sheetGestureTarget(),
-) {
-  act(() => {
-    dispatchTarget.dispatchEvent(
-      new PointerEvent("pointerup", {
-        pointerId,
-        clientY,
-        bubbles: true,
-        cancelable: true,
-        button: 0,
-      }),
-    );
-  });
-
-  lastPointerDownSurface = null;
-}
-
-async function flushTapClickSynthesis() {
-  await act(async () => {
-    await new Promise<void>((resolve) => {
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => resolve());
-      });
-    });
-  });
-}
-
-async function pointerTap(target: Element, pointerId: number, clientY: number) {
-  pointerDown(target, pointerId, clientY);
-  pointerUp(pointerId, clientY);
-  await flushTapClickSynthesis();
-}
-
-function dragSurface(
-  surface: Element,
-  pointerId: number,
-  startY: number,
-  endY: number,
-) {
-  pointerDown(surface, pointerId, startY);
-  pointerMove(pointerId, endY);
-  pointerUp(pointerId, endY);
-}
-
-function slideHeightPx(): number {
-  const slide = document.querySelector<HTMLElement>(".sheet");
-  return Number.parseInt(slide?.style.height ?? "0", 10);
-}
+import {
+  completeSheetSettling,
+  DEFAULT_HOST_HEIGHT,
+  dragSurface,
+  flushTapClickSynthesis,
+  getScrollRoot,
+  LiveHeightProbe,
+  liveHeightReader,
+  pointerDown,
+  pointerMove,
+  pointerTap,
+  pointerUp,
+  renderWithHost,
+  sheetPhase,
+  slideHeightPx,
+  stubScrollRoot,
+  stubScrollRootDimensions,
+  TestCollapsedSheet,
+  TestCollapsedSheetWithSettleSync,
+  TestContractListSelectPattern,
+  TestFullSheetWithBottomReserve,
+  TestFullSheetWithButtonList,
+  TestFullSheetWithScroll,
+  TestFullSheetWithSettleCallback,
+  TestHalfSheetWithBodyButton,
+  TestHalfSheetWithHeaderAndBodyButtons,
+  TestHalfSheetWithHeaderButtons,
+  TestHalfSheetWithScroll,
+  TestHalfSheetWithSnapCommands,
+  TestSheet,
+} from "./sheet-gesture/fixtures";
 
 describe("Sheet gesture integration", () => {
   afterEach(() => {
@@ -781,6 +403,36 @@ describe("Sheet gesture integration", () => {
     pointerUp(12, 420);
   });
 
+  it("readVisibleHeightPx matches live height during chrome drag", () => {
+    renderWithHost(
+      <Sheet snap="half">
+        <LiveHeightProbe />
+        <SheetLayout
+          header={<div data-testid="sheet-header">Header title</div>}
+          body={<div>Body</div>}
+        />
+      </Sheet>,
+    );
+
+    const chrome = document.querySelector("[data-sheet-chrome]");
+    if (!chrome) {
+      throw new Error("Expected sheet chrome");
+    }
+
+    pointerDown(chrome, 14, 500);
+    pointerMove(14, 460);
+    pointerMove(14, 420);
+
+    const readHeight = liveHeightReader.current;
+    if (!readHeight) {
+      throw new Error("Expected live height reader");
+    }
+    expect(readHeight()).toBe(slideHeightPx());
+    expect(readHeight()).toBeGreaterThan(400);
+
+    pointerUp(14, 420);
+  });
+
   describe("scrollable button list", () => {
     it("taps a row at scroll top without changing scroll or phase", async () => {
       renderWithHost(<TestFullSheetWithButtonList />);
@@ -983,6 +635,136 @@ describe("Sheet gesture integration", () => {
       expect(activated).toBe(true);
 
       outside.remove();
+    });
+  });
+
+  describe("controlled snap contract", () => {
+    it("user drag open from collapsed settles without snap-back", () => {
+      renderWithHost(<TestCollapsedSheet />);
+
+      const chrome = document.querySelector("[data-sheet-chrome]");
+      if (!chrome) {
+        throw new Error("Expected sheet chrome");
+      }
+
+      dragSurface(chrome, 50, 700, 400);
+      completeSheetSettling();
+
+      expect(screen.getByTestId("snap").textContent).toBe("half");
+    });
+
+    it("applies controlled snap change deferred until drag ends", () => {
+      renderWithHost(<TestHalfSheetWithSnapCommands />);
+
+      const chrome = document.querySelector("[data-sheet-chrome]");
+      if (!chrome) {
+        throw new Error("Expected sheet chrome");
+      }
+
+      pointerDown(chrome, 51, 500);
+      pointerMove(51, 400);
+      expect(sheetPhase()).toBe("dragging");
+
+      act(() => {
+        screen.getByTestId("cmd-full").click();
+      });
+      expect(screen.getByTestId("snap").textContent).toBe("full");
+      expect(sheetPhase()).toBe("dragging");
+
+      pointerUp(51, 400);
+      completeSheetSettling();
+
+      expect(screen.getByTestId("snap").textContent).toBe("full");
+    });
+
+    it("supersedes full to half mid-settle with one onSnapSettled", () => {
+      const onSnapSettled = vi.fn();
+      renderWithHost(
+        <TestFullSheetWithSettleCallback onSnapSettled={onSnapSettled} />,
+      );
+
+      const chrome = document.querySelector("[data-sheet-chrome]");
+      if (!chrome) {
+        throw new Error("Expected sheet chrome");
+      }
+
+      dragSurface(chrome, 52, 200, 500);
+      expect(sheetPhase()).toBe("settling");
+
+      act(() => {
+        screen.getByTestId("cmd-half").click();
+      });
+
+      completeSheetSettling();
+
+      expect(screen.getByTestId("snap").textContent).toBe("half");
+      expect(onSnapSettled).toHaveBeenCalledTimes(1);
+      expect(onSnapSettled).toHaveBeenCalledWith("half");
+    });
+
+    it("syncing controlled snap on settle after user drag open to full", () => {
+      renderWithHost(<TestCollapsedSheetWithSettleSync />);
+
+      const chrome = document.querySelector("[data-sheet-chrome]");
+      if (!chrome) {
+        throw new Error("Expected sheet chrome");
+      }
+
+      dragSurface(chrome, 54, 700, 80);
+      completeSheetSettling();
+
+      expect(screen.getByTestId("snap").textContent).toBe("full");
+
+      act(() => {
+        screen.getByTestId("cmd-half").click();
+      });
+      completeSheetSettling();
+
+      expect(screen.getByTestId("snap").textContent).toBe("half");
+    });
+
+    it("list row at full height does not command half after drag open", () => {
+      renderWithHost(<TestContractListSelectPattern />);
+
+      const chrome = document.querySelector("[data-sheet-chrome]");
+      if (!chrome) {
+        throw new Error("Expected sheet chrome");
+      }
+
+      dragSurface(chrome, 55, 700, 80);
+      expect(screen.getByTestId("snap").textContent).toBe("full");
+
+      act(() => {
+        screen.getByTestId("list-row").click();
+      });
+      completeSheetSettling();
+
+      expect(screen.getByTestId("snap").textContent).toBe("full");
+      expect(slideHeightPx()).toBe(DEFAULT_HOST_HEIGHT);
+    });
+
+    it("preserves body scroll when settling to full after drag-to-scroll", () => {
+      renderWithHost(<TestHalfSheetWithScroll />);
+
+      const body = document.querySelector("[data-sheet-scroll-root]");
+      if (!(body instanceof HTMLDivElement)) {
+        throw new Error("Expected sheet scroll root");
+      }
+
+      stubScrollRootDimensions(body, 400, 2000);
+
+      pointerDown(body, 53, 500);
+      pointerMove(53, 100);
+      pointerMove(53, 80);
+
+      const scrollAtRelease = body.scrollTop;
+      expect(scrollAtRelease).toBeGreaterThan(0);
+
+      pointerUp(53, 80);
+      completeSheetSettling();
+
+      expect(screen.getByTestId("snap").textContent).toBe("full");
+      expect(body.scrollTop).toBe(scrollAtRelease);
     });
   });
 });

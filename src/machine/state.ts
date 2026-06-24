@@ -42,6 +42,8 @@ export type SheetMachineState = {
   phase: SheetPhase;
   visibleHeightPx: number;
   restingSnap: SheetSnap;
+  /** Incremented on each new settle target; guards stale settle notifications. */
+  settleEpoch: number;
   gesture: SheetGesture | null;
   pointerArm: SheetPointerArm | null;
   scrollPointerSamples: ScrollPointerSample[];
@@ -67,6 +69,7 @@ export function createInitialSheetMachineState(args: {
       args.fullHeightPx,
     ),
     restingSnap: args.restingSnap,
+    settleEpoch: 0,
     gesture: null,
     pointerArm: null,
     scrollPointerSamples: [],

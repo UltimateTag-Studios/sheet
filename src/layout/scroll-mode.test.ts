@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  bodyScrollEnabledFromState,
   canBodyScroll,
   SHEET_BODY_DRAG_CLASS,
   SHEET_BODY_ROOT_BASE_CLASS,
@@ -56,6 +57,35 @@ describe("canBodyScroll", () => {
         isDragging: true,
       }),
     ).toBe(true);
+  });
+});
+
+describe("bodyScrollEnabledFromState", () => {
+  it("matches canBodyScroll for idle and dragging phases", () => {
+    expect(
+      bodyScrollEnabledFromState({
+        phase: "idle",
+        restingSnap: "full",
+        visibleHeightPx: 700,
+        fullHeightPx: 700,
+      }),
+    ).toBe(true);
+    expect(
+      bodyScrollEnabledFromState({
+        phase: "dragging",
+        restingSnap: "half",
+        visibleHeightPx: 698,
+        fullHeightPx: 700,
+      }),
+    ).toBe(true);
+    expect(
+      bodyScrollEnabledFromState({
+        phase: "settling",
+        restingSnap: "half",
+        visibleHeightPx: 400,
+        fullHeightPx: 700,
+      }),
+    ).toBe(false);
   });
 });
 

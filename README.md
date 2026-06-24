@@ -53,6 +53,22 @@ function Demo() {
 
 `SheetSnap`: `"collapsed"` | `"half"` | `"full"`. Controlled via `snap` + `onSnapChange`. Use `onSnapSettled` when you need the final snap after animation (e.g. deselect on collapse in `@siegetag/sheet-map`).
 
+**Controlled snap contract**
+
+- The machine applies a controlled `snap` prop change only when the prop **changes** (shell command), not when phase/restingSnap changes after a user gesture alone.
+- While dragging, a prop change is **deferred** until release.
+- While settling, a prop change **supersedes** the in-flight animation (e.g. full → half mid-transition).
+- `onSnapChange` fires at settle **start** (target snap). `onSnapSettled` fires once per settle epoch when idle — trust this for fly gating and drag-close deselect.
+- **Parent must sync `snap` after user gestures** — wire **`onSnapChange`** (settle start) and **`onSnapSettled`** (idle commit). If you only listen to `onSnapSettled`, the prop stays stale during the CSS height transition; a shell command mid-settle (e.g. list select → `half`) can supersede the in-flight user settle.
+
+**Live geometry during drag**
+
+React context `visibleHeightPx` may lag during continuous drag (machine skips React sync on `pointerMove`). For live height:
+
+- `useSheetMetricsContext().readVisibleHeightPx()` — reads authoritative machine state
+- `onLayoutFrameChange` — fires on drag moves, snap apply, and settle start
+- `getVisibleSheetHeightPx(el)` — reads `.sheet` DOM height (includes CSS transition in-between values)
+
 ### Tap vs drag
 
 The gesture machine distinguishes **tap** from **drag** using move slop (8px) on every surface — handle, header, and body. Pure taps stay off the machine until slop commits; if slop commits but sheet height and body scroll never change, the machine may see a brief armed gesture before release, and the router still synthesizes `click()` on the element that was pressed.
@@ -123,6 +139,12 @@ Export `SHEET_THEME_VARS` lists all token names.
 ## Map integrators
 
 Use `onLayoutFrameChange` on `Sheet` for machine-committed `visibleHeightPx` during drag. [`@siegetag/sheet-map`](../sheet-map) syncs map padding from that live geometry — you typically do not wire this yourself when using `MapLayout`.
+
+## Debug and contract QA
+
+Set `debug` on `<Sheet>` or `VITE_SHEET_DEBUG=true` in sheet-demo. Logs use the `[sheet]` prefix (`settle enter`, `onSnapSettled`, controlled snap).
+
+Manual checklist: `apps/sheet-demo` route `/contract` — drag to each snap, drag open while shell snap stays collapsed, supersede full→half mid-settle, scroll at full then drag handle down.
 
 ## Tests
 

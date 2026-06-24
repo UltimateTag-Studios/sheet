@@ -73,8 +73,13 @@ export function useSheetSnapHeights({
 
   const syncHeights = useCallback(() => {
     const next = readHeights();
-    setHeights((current) => (heightsEqual(current, next) ? current : next));
-    onHeightsChangeRef?.current?.(next);
+    setHeights((current) => {
+      if (heightsEqual(current, next)) {
+        return current;
+      }
+      onHeightsChangeRef?.current?.(next);
+      return next;
+    });
   }, [onHeightsChangeRef, readHeights]);
 
   useLayoutEffect(() => {

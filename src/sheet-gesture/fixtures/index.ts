@@ -1,0 +1,38 @@
+/** Shared gesture integration test helpers and fixture components. */
+
+export {
+  LiveHeightProbe,
+  TestCollapsedSheet,
+  TestCollapsedSheetWithSettleSync,
+  TestContractListSelectPattern,
+  TestFullSheetWithBottomReserve,
+  TestFullSheetWithButtonList,
+  TestFullSheetWithScroll,
+  TestFullSheetWithSettleCallback,
+  TestHalfSheetWithBodyButton,
+  TestHalfSheetWithHeaderAndBodyButtons,
+  TestHalfSheetWithHeaderButtons,
+  TestHalfSheetWithScroll,
+  TestHalfSheetWithSnapCommands,
+  TestSheet,
+} from "./components";
+export {
+  BUTTON_LIST_ROW_COUNT,
+  completeSheetSettling,
+  DEFAULT_HOST_HEIGHT,
+  dragSurface,
+  flushTapClickSynthesis,
+  getScrollRoot,
+  liveHeightReader,
+  pointerDown,
+  pointerMove,
+  pointerTap,
+  pointerUp,
+  renderWithHost,
+  sheetGestureTarget,
+  sheetPhase,
+  slideHeightPx,
+  stubHostHeight,
+  stubScrollRoot,
+  stubScrollRootDimensions,
+} from "./helpers";

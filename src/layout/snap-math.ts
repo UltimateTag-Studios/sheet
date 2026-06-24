@@ -36,17 +36,27 @@ export type VisibleHeightSnapHeights = {
   fullHeightPx: number;
 };
 
+const SETTLE_HEIGHT_EPSILON_PX = 1;
+
+export function heightsMatchForSettle(
+  aPx: number,
+  bPx: number,
+  epsilonPx = SETTLE_HEIGHT_EPSILON_PX,
+): boolean {
+  return Math.abs(Math.round(aPx) - Math.round(bPx)) <= epsilonPx;
+}
+
 export function isVisibleHeightAtRestingSnap(
   state: VisibleHeightSnapHeights,
 ): boolean {
-  return (
-    state.visibleHeightPx ===
+  return heightsMatchForSettle(
+    state.visibleHeightPx,
     heightForSnap(
       state.restingSnap,
       state.collapsedHeightPx,
       state.halfHeightPx,
       state.fullHeightPx,
-    )
+    ),
   );
 }
 

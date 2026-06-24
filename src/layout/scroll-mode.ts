@@ -16,6 +16,20 @@ export function canBodyScroll(args: {
   return args.sheetSnap === "full";
 }
 
+export function bodyScrollEnabledFromState(args: {
+  phase: "idle" | "dragging" | "settling";
+  restingSnap: SheetSnap;
+  visibleHeightPx: number;
+  fullHeightPx: number;
+}): boolean {
+  return canBodyScroll({
+    sheetSnap: args.restingSnap,
+    visibleHeightPx: args.visibleHeightPx,
+    fullHeightPx: args.fullHeightPx,
+    isDragging: args.phase === "dragging",
+  });
+}
+
 export const SHEET_BODY_ROOT_BASE_CLASS = "sheet-body-root";
 
 export const SHEET_BODY_SCROLLABLE_CLASS = "sheet-body-root--scroll";

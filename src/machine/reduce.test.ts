@@ -198,6 +198,7 @@ describe("reduceSheetMachine", () => {
       ...initial,
       phase: "settling" as const,
       visibleHeightPx: 500,
+      settleEpoch: 1,
     };
 
     const result = armPointer(settling, {
@@ -210,7 +211,9 @@ describe("reduceSheetMachine", () => {
     expect(result.state.pointerArm?.pointerId).toBe(1);
     expect(result.effects).toEqual(
       expect.arrayContaining([
-        { type: "completeSettleImmediate" },
+        { type: "syncIdleFrame", suppressTransition: true },
+        { type: "notifySnapSettled", snap: "half", settleEpoch: 1 },
+        { type: "notifyLayoutFrame" },
         { type: "cancelScrollMomentum" },
       ]),
     );
@@ -312,6 +315,37 @@ describe("reduceSheetMachine", () => {
     expect(result.effects).toContainEqual({ type: "scrollBody", deltaPx: 10 });
   });
 
+  it("settles to full on release after sheet drag transitions to scroll", () => {
+    let state = createInitialSheetMachineState({
+      restingSnap: "half",
+      ...baseHeights,
+    });
+
+    state = armPointer(state, {
+      clientY: 400,
+      surface: "body",
+    }).state;
+
+    state = commitPointer(state, 50).state;
+    state = movePointer(state, 40).state;
+
+    expect(state.gesture?.intent).toBe("scroll");
+    expect(state.visibleHeightPx).toBe(700);
+
+    const result = reduceSheetMachine(state, {
+      type: "pointerUp",
+      pointerId: 1,
+    });
+
+    expect(result.state.phase).toBe("idle");
+    expect(result.state.restingSnap).toBe("full");
+    expect(result.effects).toContainEqual({
+      type: "notifySnapSettled",
+      snap: "full",
+      settleEpoch: 1,
+    });
+  });
+
   it("does not drag below collapsed height when reserve is in the floor", () => {
     const reserveHeights = {
       collapsedHeightPx: 210,
@@ -400,7 +434,30 @@ describe("reduceSheetMachine", () => {
     expect(result.effects).toContainEqual({
       type: "syncSettleFrame",
       heightPx: 700,
+      settleEpoch: 1,
     });
+  });
+
+  it("settleComplete emits notifySnapSettled with settleEpoch", () => {
+    const settling = {
+      ...createInitialSheetMachineState({
+        restingSnap: "full",
+        ...baseHeights,
+      }),
+      phase: "settling" as const,
+      visibleHeightPx: 700,
+      settleEpoch: 2,
+    };
+
+    const result = reduceSheetMachine(settling, { type: "settleComplete" });
+
+    expect(result.state.phase).toBe("idle");
+    expect(result.effects).toEqual([
+      { type: "syncIdleFrame", suppressTransition: true },
+      { type: "notifySnapSettled", snap: "full", settleEpoch: 2 },
+      { type: "notifyLayoutFrame" },
+      { type: "syncBodyScrollEnabled", enabled: true },
+    ]);
   });
 
   it("preserves visible height on measure while settling", () => {
@@ -476,5 +533,41 @@ describe("reduceSheetMachine", () => {
 
     expect(result.state.visibleHeightPx).toBe(360);
     expect(result.state.collapsedHeightPx).toBe(180);
+    expect(result.effects).toContainEqual({
+      type: "notifySnapHeightsChange",
+      collapsedHeightPx: 180,
+      halfHeightPx: 360,
+      fullHeightPx: 720,
+    });
+  });
+
+  it("enterSettle to non-full emits resetBodyScroll", () => {
+    const initial = createInitialSheetMachineState({
+      restingSnap: "full",
+      ...baseHeights,
+    });
+
+    const result = reduceSheetMachine(initial, {
+      type: "setSnap",
+      snap: "half",
+      source: "controlled",
+    });
+
+    expect(result.effects).toContainEqual({ type: "resetBodyScroll" });
+  });
+
+  it("enterSettle to full does not emit resetBodyScroll", () => {
+    const initial = createInitialSheetMachineState({
+      restingSnap: "half",
+      ...baseHeights,
+    });
+
+    const result = reduceSheetMachine(initial, {
+      type: "setSnap",
+      snap: "full",
+      source: "controlled",
+    });
+
+    expect(result.effects).not.toContainEqual({ type: "resetBodyScroll" });
   });
 });

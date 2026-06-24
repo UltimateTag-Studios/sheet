@@ -1,9 +1,4 @@
-export type {
-  SheetMachineEffect,
-  SheetMachineEvent,
-  SheetMachineResult,
-} from "./machine";
-export { reduceSheetMachine } from "./machine";
+export { measureBootstrapEffects, reduceSheetMachine } from "./reduce";
 export type {
   ScrollPointerSample,
   SheetGesture,
@@ -18,6 +13,19 @@ export {
   createInitialSheetMachineState,
   SHEET_AXIS_THRESHOLD_PX,
 } from "./state";
+export type {
+  SetSnapSource,
+  SheetMachineEffect,
+  SheetMachineEvent,
+  SheetMachineMeasure,
+  SheetMachinePointerArm,
+  SheetMachinePointerCommit,
+  SheetMachinePointerMove,
+  SheetMachinePointerUp,
+  SheetMachineResult,
+  SheetMachineSetSnap,
+  SheetMachineSettleComplete,
+} from "./types";
 export type {
   SheetEffectRunner,
   SheetMachineDispatch,

@@ -1,7 +1,17 @@
 import { describe, expect, it } from "vitest";
 
 import { createInitialSheetMachineState } from "../machine";
-import { isVisibleHeightAtRestingSnap } from "./snap-math";
+import {
+  heightsMatchForSettle,
+  isVisibleHeightAtRestingSnap,
+} from "./snap-math";
+
+describe("heightsMatchForSettle", () => {
+  it("matches within 1px rounded tolerance", () => {
+    expect(heightsMatchForSettle(399.4, 399.6)).toBe(true);
+    expect(heightsMatchForSettle(399, 401)).toBe(false);
+  });
+});
 
 describe("isVisibleHeightAtRestingSnap", () => {
   it("is true when visible height matches the resting snap", () => {

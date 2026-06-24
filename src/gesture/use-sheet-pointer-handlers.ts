@@ -10,9 +10,18 @@ import {
   type SheetMachineEvent,
   type SheetMachineResult,
   type SheetPhase,
-  type SheetPointerRoute,
+  type SheetPointerArm,
   type SheetPointerSurface,
 } from "../machine";
+import {
+  acquireSheetPointerCapture,
+  attachPointerTracking,
+  commitWatchRoute,
+  type DomPointerLatch,
+  detachPointerTracking,
+  resolvePointerRoute,
+  shouldCapturePointerOnDown,
+} from "./pointer-latch";
 import { resolvePressElement } from "./resolve-press-element";
 import { scheduleTapClickIfMissing } from "./schedule-tap-click-if-missing";
 
@@ -21,146 +30,26 @@ export type SheetPointerHandlers = {
   onBodyPointerDown: (event: React.PointerEvent<HTMLElement>) => void;
 };
 
-type PointerTracking = {
-  move: (event: PointerEvent) => void;
-  up: (event: PointerEvent) => void;
-};
-
-/** DOM-only latch — capture, FSM route, and tap synthesis targets. */
-type DomPointerLatch = {
-  pointerId: number;
-  pressTarget: EventTarget;
-  sheetBoundary: HTMLElement;
-  route: SheetPointerRoute;
-  startClientY: number;
-  lastClientY: number;
-  pointerCaptured: boolean;
-  committed: boolean;
-  hadEffect: boolean;
-  tracking: PointerTracking;
-};
-
-const MOVE_LISTENER: AddEventListenerOptions = { passive: true };
-
-function isHandlePressTarget(target: EventTarget): boolean {
-  return (
-    target instanceof HTMLElement &&
-    Boolean(target.closest("[data-sheet-handle],.sheet-handle"))
-  );
-}
-
-function resolvePointerRoute(
-  pressTarget: EventTarget,
-  sheetBoundary: HTMLElement,
-  surface: SheetPointerSurface,
-): SheetPointerRoute {
-  if (surface === "chrome" || isHandlePressTarget(pressTarget)) {
-    return "sheet";
-  }
-
-  const pressElement = resolvePressElement(pressTarget);
-  if (
-    pressElement &&
-    pressElement !== sheetBoundary &&
-    sheetBoundary.contains(pressElement)
-  ) {
-    return "watch";
-  }
-
-  return "sheet";
-}
-
-function shouldCapturePointerOnDown(
-  target: EventTarget,
-  route: SheetPointerRoute,
-): boolean {
-  if (route === "watch") {
-    return false;
-  }
-  return isHandlePressTarget(target);
-}
-
-function acquireSheetPointerCapture(
-  sheetBoundary: HTMLElement,
-  pointerId: number,
-): boolean {
-  if (typeof sheetBoundary.setPointerCapture !== "function") {
-    return false;
-  }
-  sheetBoundary.setPointerCapture(pointerId);
-  return true;
-}
-
-function releaseSheetPointerCapture(
-  sheetBoundary: HTMLElement,
-  pointerId: number,
-): void {
-  if (
-    typeof sheetBoundary.releasePointerCapture === "function" &&
-    typeof sheetBoundary.hasPointerCapture === "function" &&
-    sheetBoundary.hasPointerCapture(pointerId)
-  ) {
-    sheetBoundary.releasePointerCapture(pointerId);
-  }
-}
-
-function detachPointerTracking(latch: DomPointerLatch): void {
-  const { tracking, sheetBoundary, pointerId, pointerCaptured } = latch;
-  sheetBoundary.removeEventListener(
-    "pointermove",
-    tracking.move,
-    MOVE_LISTENER,
-  );
-  sheetBoundary.removeEventListener("pointerup", tracking.up);
-  sheetBoundary.removeEventListener("pointercancel", tracking.up);
-  if (pointerCaptured) {
-    releaseSheetPointerCapture(sheetBoundary, pointerId);
-  }
-}
-
-function attachPointerTracking(latch: DomPointerLatch): void {
-  const { tracking, sheetBoundary } = latch;
-  sheetBoundary.addEventListener("pointermove", tracking.move, MOVE_LISTENER);
-  sheetBoundary.addEventListener("pointerup", tracking.up);
-  sheetBoundary.addEventListener("pointercancel", tracking.up);
-}
-
-function commitWatchRoute(latch: DomPointerLatch): void {
-  latch.route = "sheet";
-  if (!latch.pointerCaptured) {
-    latch.pointerCaptured = acquireSheetPointerCapture(
-      latch.sheetBoundary,
-      latch.pointerId,
-    );
-  }
-}
-
-function notePointerMachineResult(
-  latch: DomPointerLatch,
-  result: SheetMachineResult,
-): void {
-  if (result.state.pointerArm?.hadEffect) {
-    latch.hadEffect = true;
-  }
-}
-
 /**
  * Pointer routing on the sheet panel only — no document listeners.
- * Gesture intent lives in the sheet machine (`pointerArm` / `pointerCommit`).
+ * Commit and hadEffect come from machine `pointerArm` via `readPointerArm`.
  */
 export function useSheetPointerHandlers(
   dispatch: (event: SheetMachineEvent) => SheetMachineResult,
   readScrollTop: () => number,
   readMachinePhase: () => SheetPhase | null,
+  readPointerArm: () => SheetPointerArm | null,
 ): SheetPointerHandlers {
   const latchRef = useRef<DomPointerLatch | null>(null);
   const dispatchRef = useRef(dispatch);
   const readScrollTopRef = useRef(readScrollTop);
   const readMachinePhaseRef = useRef(readMachinePhase);
+  const readPointerArmRef = useRef(readPointerArm);
 
   dispatchRef.current = dispatch;
   readScrollTopRef.current = readScrollTop;
   readMachinePhaseRef.current = readMachinePhase;
+  readPointerArmRef.current = readPointerArm;
 
   const endPointerLatch = useCallback(() => {
     const latch = latchRef.current;
@@ -183,9 +72,11 @@ export function useSheetPointerHandlers(
         startClientY,
         lastClientY,
         pointerId,
-        committed: wasCommitted,
-        hadEffect,
       } = latch;
+
+      const arm = readPointerArmRef.current();
+      const wasCommitted = arm?.committed ?? false;
+      const hadEffect = arm?.hadEffect ?? false;
 
       if (wasCommitted) {
         dispatchRef.current({
@@ -227,7 +118,7 @@ export function useSheetPointerHandlers(
       return;
     }
 
-    if (!latch.committed) {
+    if (!readPointerArmRef.current()?.committed) {
       const deltaY = Math.abs(event.clientY - latch.startClientY);
       if (deltaY < SHEET_AXIS_THRESHOLD_PX) {
         return;
@@ -242,29 +133,26 @@ export function useSheetPointerHandlers(
         );
       }
 
-      latch.committed = true;
-      const result = dispatchRef.current({
+      dispatchRef.current({
         type: "pointerCommit",
         pointerId: event.pointerId,
         clientY: event.clientY,
         scrollTopPx: readScrollTopRef.current(),
         timeMs: performance.now(),
       });
-      notePointerMachineResult(latch, result);
       latch.lastClientY = event.clientY;
       return;
     }
 
     latch.lastClientY = event.clientY;
 
-    const result = dispatchRef.current({
+    dispatchRef.current({
       type: "pointerMove",
       pointerId: event.pointerId,
       clientY: event.clientY,
       scrollTopPx: readScrollTopRef.current(),
       timeMs: performance.now(),
     });
-    notePointerMachineResult(latch, result);
   }, []);
 
   const onPointerDown = useCallback(
@@ -308,8 +196,6 @@ export function useSheetPointerHandlers(
           startClientY: event.clientY,
           lastClientY: event.clientY,
           pointerCaptured,
-          committed: false,
-          hadEffect: false,
           tracking,
         };
 

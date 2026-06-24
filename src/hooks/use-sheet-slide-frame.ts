@@ -1,34 +1,55 @@
-import type { RefObject, TransitionEvent } from "react";
+import type { TransitionEvent } from "react";
 import { useCallback, useLayoutEffect, useMemo, useRef } from "react";
 
 import { sheetFrameStyle } from "../layout/sheet-transform";
-import { applySheetSlideFrame } from "../layout/sync-sheet-dom-frame";
 import type { SheetPhase } from "../machine";
 
 export type UseSheetSlideFrameOptions = {
   visibleHeightPx: number;
   phase: SheetPhase;
-  sheetSlideRef: RefObject<HTMLDivElement | null>;
   /** When false, chrome is laid out invisibly until the machine has measured heights. */
   enabled: boolean;
   onSettleComplete: () => void;
-  /** Fires after the slide frame is applied at rest (idle / settling). */
-  onLayoutFrameApplied?: () => void;
 };
 
 export function useSheetSlideFrame({
   visibleHeightPx,
   phase,
-  sheetSlideRef,
   enabled,
   onSettleComplete,
-  onLayoutFrameApplied,
 }: UseSheetSlideFrameOptions) {
   const suppressInitialLayoutTransitionRef = useRef(true);
   const settlingStyleRef = useRef<{
     height: string;
     transition: string;
   } | null>(null);
+  const prevPhaseRef = useRef<SheetPhase>("idle");
+
+  useLayoutEffect(() => {
+    if (!enabled) {
+      settlingStyleRef.current = null;
+      prevPhaseRef.current = phase;
+      return;
+    }
+
+    if (phase === "settling" && prevPhaseRef.current !== "settling") {
+      settlingStyleRef.current = sheetFrameStyle(
+        visibleHeightPx,
+        "settling",
+        suppressInitialLayoutTransitionRef.current,
+      );
+    }
+
+    if (phase !== "settling") {
+      settlingStyleRef.current = null;
+    }
+
+    if (phase === "idle" && suppressInitialLayoutTransitionRef.current) {
+      suppressInitialLayoutTransitionRef.current = false;
+    }
+
+    prevPhaseRef.current = phase;
+  }, [enabled, phase, visibleHeightPx]);
 
   const frameStyle = useMemo(() => {
     if (!enabled) {
@@ -39,6 +60,14 @@ export function useSheetSlideFrame({
       };
     }
 
+    if (phase === "dragging") {
+      return {
+        height: `${Math.round(visibleHeightPx)}px`,
+        transition: "none",
+        visibility: "visible" as const,
+      };
+    }
+
     if (phase === "settling" && settlingStyleRef.current) {
       return {
         ...settlingStyleRef.current,
@@ -46,39 +75,22 @@ export function useSheetSlideFrame({
       };
     }
 
-    const nextStyle = sheetFrameStyle(
-      visibleHeightPx,
-      phase,
-      suppressInitialLayoutTransitionRef.current,
-    );
-
     if (phase === "settling") {
-      settlingStyleRef.current = nextStyle;
-    } else {
-      settlingStyleRef.current = null;
+      return {
+        ...sheetFrameStyle(visibleHeightPx, phase, false),
+        visibility: "visible" as const,
+      };
     }
 
     return {
-      ...nextStyle,
+      ...sheetFrameStyle(
+        visibleHeightPx,
+        phase,
+        suppressInitialLayoutTransitionRef.current,
+      ),
       visibility: "visible" as const,
     };
   }, [enabled, phase, visibleHeightPx]);
-
-  useLayoutEffect(() => {
-    if (!enabled || phase === "dragging" || phase === "settling") {
-      return;
-    }
-    const slide = sheetSlideRef.current;
-    if (!slide) {
-      return;
-    }
-    const suppress = suppressInitialLayoutTransitionRef.current;
-    applySheetSlideFrame(slide, visibleHeightPx, phase, suppress);
-    if (suppress) {
-      suppressInitialLayoutTransitionRef.current = false;
-    }
-    onLayoutFrameApplied?.();
-  }, [enabled, onLayoutFrameApplied, phase, sheetSlideRef, visibleHeightPx]);
 
   const onTransitionEnd = useCallback(
     (event: TransitionEvent<HTMLDivElement>) => {
@@ -92,7 +104,6 @@ export function useSheetSlideFrame({
         return;
       }
       if (phase === "settling") {
-        settlingStyleRef.current = null;
         onSettleComplete();
       }
     },
