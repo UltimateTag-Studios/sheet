@@ -397,9 +397,13 @@ describe("reduceSheetMachine", () => {
       type: "notifySnapChange",
       snap: "full",
     });
+    expect(result.effects).toContainEqual({
+      type: "syncSettleFrame",
+      heightPx: 700,
+    });
   });
 
-  it("updates settling target height when measured snap heights change", () => {
+  it("preserves visible height on measure while settling", () => {
     const initial = createInitialSheetMachineState({
       restingSnap: "collapsed",
       collapsedHeightPx: 150,
@@ -419,15 +423,18 @@ describe("reduceSheetMachine", () => {
       fullHeightPx: 700,
     });
 
-    expect(measured.state.visibleHeightPx).toBe(210);
+    expect(measured.state.visibleHeightPx).toBe(150);
     expect(measured.state.collapsedHeightPx).toBe(210);
 
-    const settled = reduceSheetMachine(measured.state, {
-      type: "settleComplete",
+    const remeasured = reduceSheetMachine(measured.state, {
+      type: "measure",
+      collapsedHeightPx: 210,
+      halfHeightPx: 350,
+      fullHeightPx: 700,
     });
 
-    expect(settled.state.phase).toBe("idle");
-    expect(settled.state.visibleHeightPx).toBe(210);
+    expect(remeasured.state).toBe(measured.state);
+    expect(remeasured.effects).toEqual([]);
   });
 
   it("measure does not override visible height while dragging", () => {

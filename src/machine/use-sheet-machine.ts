@@ -78,6 +78,10 @@ function shouldSyncReactState(
   previous: SheetMachineState,
   next: SheetMachineState,
 ): boolean {
+  if (event.type === "measure" && previous === next) {
+    return false;
+  }
+
   return !(
     event.type === "pointerMove" &&
     previous.phase === "dragging" &&

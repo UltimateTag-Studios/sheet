@@ -91,6 +91,7 @@ export type SheetMachineEffect =
       heightPx: number;
       bodyScrollEnabled: boolean;
     }
+  | { type: "syncSettleFrame"; heightPx: number }
   | { type: "completeSettleImmediate" }
   | { type: "cancelScrollMomentum" }
   | { type: "startScrollMomentum"; velocityPxPerMs: number }
@@ -189,7 +190,7 @@ function settlingEffects(
   if (Math.round(heightPx) === Math.round(state.visibleHeightPx)) {
     return [...effects, { type: "completeSettleImmediate" }];
   }
-  return effects;
+  return [...effects, { type: "syncSettleFrame", heightPx }];
 }
 
 export function reduceSheetMachine(
@@ -250,18 +251,18 @@ function reduceMeasure(
   }
 
   if (state.phase === "settling") {
+    const nextVisibleHeightPx = state.visibleHeightPx;
+    const heightsChanged =
+      state.collapsedHeightPx !== event.collapsedHeightPx ||
+      state.halfHeightPx !== event.halfHeightPx ||
+      state.fullHeightPx !== event.fullHeightPx;
+    if (!heightsChanged) {
+      return { state, effects: [] };
+    }
     return {
       state: {
         ...nextState,
-        visibleHeightPx: clampHeight(
-          nextState,
-          heightForSnap(
-            state.restingSnap,
-            event.collapsedHeightPx,
-            event.halfHeightPx,
-            event.fullHeightPx,
-          ),
-        ),
+        visibleHeightPx: nextVisibleHeightPx,
       },
       effects: [],
     };

@@ -1,5 +1,5 @@
 export const SHEET_SETTLE_HEIGHT_TRANSITION =
-  "height 0.5s cubic-bezier(0.32, 0.72, 0, 1)";
+  "height 0.18s cubic-bezier(0, 0, 0.2, 1)";
 
 export type SheetFrameStyle = {
   height: string;

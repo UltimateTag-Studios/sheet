@@ -25,6 +25,10 @@ export function useSheetSlideFrame({
   onLayoutFrameApplied,
 }: UseSheetSlideFrameOptions) {
   const suppressInitialLayoutTransitionRef = useRef(true);
+  const settlingStyleRef = useRef<{
+    height: string;
+    transition: string;
+  } | null>(null);
 
   const frameStyle = useMemo(() => {
     if (!enabled) {
@@ -34,18 +38,34 @@ export function useSheetSlideFrame({
         visibility: "hidden" as const,
       };
     }
+
+    if (phase === "settling" && settlingStyleRef.current) {
+      return {
+        ...settlingStyleRef.current,
+        visibility: "visible" as const,
+      };
+    }
+
+    const nextStyle = sheetFrameStyle(
+      visibleHeightPx,
+      phase,
+      suppressInitialLayoutTransitionRef.current,
+    );
+
+    if (phase === "settling") {
+      settlingStyleRef.current = nextStyle;
+    } else {
+      settlingStyleRef.current = null;
+    }
+
     return {
-      ...sheetFrameStyle(
-        visibleHeightPx,
-        phase,
-        suppressInitialLayoutTransitionRef.current,
-      ),
+      ...nextStyle,
       visibility: "visible" as const,
     };
   }, [enabled, phase, visibleHeightPx]);
 
   useLayoutEffect(() => {
-    if (!enabled || phase === "dragging") {
+    if (!enabled || phase === "dragging" || phase === "settling") {
       return;
     }
     const slide = sheetSlideRef.current;
@@ -72,6 +92,7 @@ export function useSheetSlideFrame({
         return;
       }
       if (phase === "settling") {
+        settlingStyleRef.current = null;
         onSettleComplete();
       }
     },

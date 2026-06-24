@@ -143,6 +143,17 @@ export function Sheet({
         }
         break;
       }
+      case "syncSettleFrame": {
+        const slide = sheetSlideRef.current;
+        if (slide) {
+          applySheetSlideFrame(slide, effect.heightPx, "settling", false);
+        }
+        const machineState = hookStateRef.current?.current ?? null;
+        if (machineState) {
+          emitLayoutFrameChangeRef.current(machineState);
+        }
+        break;
+      }
       case "completeSettleImmediate": {
         const slide = sheetSlideRef.current;
         const machineState = hookStateRef.current?.current ?? null;
