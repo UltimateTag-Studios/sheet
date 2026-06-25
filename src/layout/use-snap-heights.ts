@@ -1,5 +1,11 @@
 import type { RefObject } from "react";
-import { useCallback, useEffect, useLayoutEffect, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 
 import { measureCollapsedHeightPx, readHostHeightPx } from "./snap-heights";
 
@@ -70,6 +76,7 @@ export function useSheetSnapHeights({
   );
 
   const [heights, setHeights] = useState<SheetSnapHeights>(() => readHeights());
+  const notifiedHeightsRef = useRef(heights);
 
   const syncHeights = useCallback(() => {
     const next = readHeights();
@@ -77,10 +84,17 @@ export function useSheetSnapHeights({
       if (heightsEqual(current, next)) {
         return current;
       }
-      onHeightsChangeRef?.current?.(next);
       return next;
     });
-  }, [onHeightsChangeRef, readHeights]);
+  }, [readHeights]);
+
+  useLayoutEffect(() => {
+    if (heightsEqual(notifiedHeightsRef.current, heights)) {
+      return;
+    }
+    notifiedHeightsRef.current = heights;
+    onHeightsChangeRef?.current?.(heights);
+  }, [heights, onHeightsChangeRef]);
 
   useLayoutEffect(() => {
     if (!hostEl) {
