@@ -2,6 +2,7 @@
   "name": "@siegetag/sheet",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@10.22.0",
   "license": "AGPL-3.0-or-later",
   "type": "module",
   "description": "Generic bottom sheet with unified gesture state machine for React web apps",
